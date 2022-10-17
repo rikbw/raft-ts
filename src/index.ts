@@ -27,7 +27,7 @@ mainRouter.get('/delete/:key', (context) => {
 
 mainRouter.post('/set/:key', (context) => {
     const { key } = context.params;
-    const value = context.request.body;
+    const value = JSON.parse(context.request.body);
     console.log('got set request', { key, value });
     store.set(key as string, value);
     context.body = 'ok';
