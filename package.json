@@ -17,6 +17,8 @@
     "@typescript-eslint/eslint-plugin": "^5.40.0",
     "@typescript-eslint/parser": "^5.40.0",
     "eslint": "^8.25.0",
+    "fp-ts": "^2.13.0",
+    "io-ts": "^2.2.19",
     "koa": "^2.13.4",
     "koa-body": "^5.0.0",
     "node-fetch": "2",

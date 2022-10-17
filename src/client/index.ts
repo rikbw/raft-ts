@@ -1,5 +1,7 @@
 import split2 from 'split2';
 import fetch from 'node-fetch';
+import { either, function as func } from 'fp-ts';
+import * as io from 'io-ts';
 
 process.stdin.pipe(split2()).on('data', handleInput);
 
@@ -57,7 +59,14 @@ class Client {
 const client = new Client();
 
 async function handleInput(input: string) {
-    const command = parseInput(input);
+    const commandResult = parseInput(input);
+
+    if (either.isLeft(commandResult)) {
+        console.log('error: invalid command');
+        return;
+    }
+
+    const command = commandResult.right;
 
     switch (command.type) {
         case 'get': {
@@ -95,32 +104,56 @@ type Command =
           value: string;
       };
 
-function parseInput(input: string): Command {
-    // TODO use io-ts
+const GetInput = io.tuple([io.string]);
+const SetInput = io.tuple([io.string, io.string]);
+const DeleteInput = io.tuple([io.string]);
+
+function parseInput(input: string): either.Either<'failed', Command> {
     const parts = input.split(' ');
-    const command = parts[0];
+    const [command, ...rest] = parts;
 
     switch (command) {
         case 'get':
-            return {
-                type: 'get',
-                key: parts[1]!,
-            };
+            return func.pipe(
+                rest,
+                GetInput.decode,
+                either.map(([key]) => {
+                    return {
+                        type: 'get' as const,
+                        key,
+                    };
+                }),
+                either.mapLeft(() => 'failed' as const),
+            );
 
         case 'set':
-            return {
-                type: 'set',
-                key: parts[1]!,
-                value: parts[2]!,
-            };
+            return func.pipe(
+                rest,
+                SetInput.decode,
+                either.map(([key, value]) => {
+                    return {
+                        type: 'set' as const,
+                        key,
+                        value,
+                    };
+                }),
+                either.mapLeft(() => 'failed' as const),
+            );
 
         case 'delete':
-            return {
-                type: 'delete',
-                key: parts[1]!,
-            };
+            return func.pipe(
+                rest,
+                DeleteInput.decode,
+                either.map(([key]) => {
+                    return {
+                        type: 'delete' as const,
+                        key,
+                    };
+                }),
+                either.mapLeft(() => 'failed' as const),
+            );
 
         default:
-            throw new Error(`failed to parse: ${input}`);
+            return either.left('failed' as const);
     }
 }

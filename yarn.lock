@@ -770,6 +770,11 @@ formidable@^2.0.1:
     once "1.4.0"
     qs "6.9.3"
 
+fp-ts@^2.13.0:
+  version "2.13.0"
+  resolved "https://registry.yarnpkg.com/fp-ts/-/fp-ts-2.13.0.tgz#68825c2f1251c3fe6ff41a98eaa69599a3b2758a"
+  integrity sha512-3pkkmRDdA3CBQPDfr7vhNomiHOu7eQZDmGeFsD19gTKpUNy0eqvO3yN1LsSCenkDAXlqJSIDd6wtM7qqrR++UQ==
+
 fresh@~0.5.2:
   version "0.5.2"
   resolved "https://registry.yarnpkg.com/fresh/-/fresh-0.5.2.tgz#3d8cadd90d976569fa835ab1f8e4b23a105605a7"
@@ -945,6 +950,11 @@ inherits@2, inherits@2.0.4:
   version "2.0.4"
   resolved "https://registry.yarnpkg.com/inherits/-/inherits-2.0.4.tgz#0fa2c64f932917c3433a0ded55363aae37416b7c"
   integrity sha512-k/vGaX4/Yla3WzyMCvTQOXYeIHvqOKtnqBduzTHpzpQZzAskKMhZ2K+EnBiSM9zGSoIFeMpXKxa4dYeZIQqewQ==
+
+io-ts@^2.2.19:
+  version "2.2.19"
+  resolved "https://registry.yarnpkg.com/io-ts/-/io-ts-2.2.19.tgz#4ba5e120472a0a07ff693fdb3d7075ea1c1b77c3"
+  integrity sha512-ED0GQwvKRr5C2jqOOJCkuJW2clnbzqFexQ8V7Qsb+VB36S1Mk/OKH7k0FjSe4mjKy9qBRA3OqgVGyFMUEKIubw==
 
 is-extglob@^2.1.1:
   version "2.1.1"
