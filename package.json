@@ -1,0 +1,8 @@
+{
+  "name": "raft_2022_10",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "repository": "git@github.com:dabeaz-course/raft_2022_10.git",
+  "author": "Rik Bauwens <rikbauwens1@gmail.com>",
+  "license": "MIT"
+}
