@@ -234,5 +234,36 @@ describe('Log', () => {
             expect(result).toEqual(false);
             expect(log.getEntries()).toEqual(initialEntries);
         });
+
+        it('returns if the previous entry identifier is correct when entries is empty', () => {
+            const initialEntries = [
+                {
+                    term: 3,
+                    value: 'z <- 123',
+                },
+            ];
+            const log = new Log(initialEntries);
+
+            expect(
+                log.appendEntries({
+                    previousEntryIdentifier: {
+                        term: 0,
+                        index: 3,
+                    },
+                    entries: [],
+                }),
+            ).toEqual(false);
+            expect(
+                log.appendEntries({
+                    previousEntryIdentifier: {
+                        term: 3,
+                        index: 10,
+                    },
+                    entries: [],
+                }),
+            ).toEqual(false);
+
+            expect(log.getEntries()).toEqual(initialEntries);
+        });
     });
 });
