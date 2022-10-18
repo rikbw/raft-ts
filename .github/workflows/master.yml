@@ -1,0 +1,21 @@
+name: CI
+
+on:
+  push:
+    branches-ignore:
+      - master
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2
+        with:
+          cache: 'yarn'
+      - run: yarn
+      - run: yarn build
+      - run: yarn test --forceExit
+      - run: yarn lint
+      - run: yarn lint:prettier
+
