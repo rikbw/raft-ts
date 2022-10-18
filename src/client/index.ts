@@ -2,13 +2,9 @@ import split2 from 'split2';
 import fetch from 'node-fetch';
 import { either, function as func } from 'fp-ts';
 import * as io from 'io-ts';
+import { unreachable } from '../util/unreachable';
 
 process.stdin.pipe(split2()).on('data', handleInput);
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const unreachable = (_: never) => {
-    throw new Error('unreachable');
-};
 
 class Client {
     private static url({ path }: { path: string }) {
