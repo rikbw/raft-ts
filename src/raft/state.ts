@@ -38,7 +38,10 @@ type MutableEffect =
 
 export type Effect = Readonly<MutableEffect>;
 
-type ReducerResult = [State, Effect[]];
+type ReducerResult = {
+    newState: State;
+    effects: Effect[];
+};
 
 export function reduce(event: Event, state: State): ReducerResult {
     switch (event.type) {
@@ -59,12 +62,12 @@ function reduceElectionTimeout(state: State): ReducerResult {
         case 'follower':
         case 'candidate': {
             const newTerm = state.currentTerm + 1;
-            return [
-                {
+            return {
+                newState: {
                     type: 'candidate',
                     currentTerm: newTerm,
                 },
-                [
+                effects: [
                     {
                         type: 'broadcastRequestVote',
                         term: newTerm,
@@ -73,7 +76,7 @@ function reduceElectionTimeout(state: State): ReducerResult {
                         type: 'resetElectionTimeout',
                     },
                 ],
-            ];
+            };
         }
 
         default:

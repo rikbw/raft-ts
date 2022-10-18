@@ -11,11 +11,11 @@ describe('state', () => {
                 type: 'electionTimeout',
             };
 
-            const expectedState: State = {
+            const newState: State = {
                 type: 'candidate',
                 currentTerm: 1,
             };
-            const expectedEffects: Effect[] = [
+            const effects: Effect[] = [
                 {
                     type: 'broadcastRequestVote',
                     term: 1,
@@ -24,10 +24,10 @@ describe('state', () => {
                     type: 'resetElectionTimeout',
                 },
             ];
-            expect(reduce(event, state)).toEqual([
-                expectedState,
-                expectedEffects,
-            ]);
+            expect(reduce(event, state)).toEqual({
+                newState,
+                effects,
+            });
         });
     });
 
@@ -41,11 +41,11 @@ describe('state', () => {
                 type: 'electionTimeout',
             };
 
-            const expectedState: State = {
+            const newState: State = {
                 type: 'candidate',
                 currentTerm: 3,
             };
-            const expectedEffects: Effect[] = [
+            const effects: Effect[] = [
                 {
                     type: 'broadcastRequestVote',
                     term: 3,
@@ -54,10 +54,10 @@ describe('state', () => {
                     type: 'resetElectionTimeout',
                 },
             ];
-            expect(reduce(event, state)).toEqual([
-                expectedState,
-                expectedEffects,
-            ]);
+            expect(reduce(event, state)).toEqual({
+                newState,
+                effects,
+            });
         });
     });
 
