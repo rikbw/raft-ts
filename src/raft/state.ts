@@ -21,9 +21,14 @@ export const initialState: State = {
     currentTerm: 0,
 };
 
-type MutableEvent = {
-    type: 'electionTimeout';
-};
+type MutableEvent =
+    | {
+          type: 'electionTimeout';
+      }
+    | {
+          type: 'receivedAppendEntries';
+          term: number;
+      };
 
 export type Event = Readonly<MutableEvent>;
 
@@ -48,8 +53,11 @@ export function reduce(event: Event, state: State): ReducerResult {
         case 'electionTimeout':
             return reduceElectionTimeout(state);
 
+        case 'receivedAppendEntries':
+            return reduceReceivedAppendEntries(state, event.term);
+
         default:
-            return unreachable(event.type);
+            return unreachable(event);
     }
 }
 
@@ -78,6 +86,34 @@ function reduceElectionTimeout(state: State): ReducerResult {
                 ],
             };
         }
+
+        default:
+            return unreachable(state);
+    }
+}
+
+function reduceReceivedAppendEntries(
+    state: State,
+    term: number,
+): ReducerResult {
+    switch (state.type) {
+        case 'follower': {
+            if (term > state.currentTerm) {
+                return {
+                    newState: {
+                        type: 'follower',
+                        currentTerm: term,
+                    },
+                    effects: [],
+                };
+            }
+
+            throw new Error('not implemented');
+        }
+
+        case 'candidate':
+        case 'leader':
+            throw new Error('not implemented');
 
         default:
             return unreachable(state);
