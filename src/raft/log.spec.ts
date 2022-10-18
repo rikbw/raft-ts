@@ -183,7 +183,7 @@ describe('Log', () => {
             expect(log.getEntries()).toEqual([{ term: 3, value: 'x <- 1' }]);
         });
 
-        it('rejects the entries if the previous entry identifier is nowhere in the log', () => {
+        it('rejects the entries if the term of the previous entry identifier is not correct', () => {
             const initialEntries = [
                 {
                     term: 3,
@@ -196,6 +196,32 @@ describe('Log', () => {
                 previousEntryIdentifier: {
                     term: 2,
                     index: 0,
+                },
+                entries: [
+                    {
+                        term: 4,
+                        value: 'w <- 34',
+                    },
+                ],
+            });
+
+            expect(result).toEqual(false);
+            expect(log.getEntries()).toEqual(initialEntries);
+        });
+
+        it('rejects the entries when the index of the previous identifier is not in the log', () => {
+            const initialEntries = [
+                {
+                    term: 3,
+                    value: 'z <- 123',
+                },
+            ];
+            const log = new Log(initialEntries);
+
+            const result = log.appendEntries({
+                previousEntryIdentifier: {
+                    term: 3,
+                    index: 10,
                 },
                 entries: [
                     {
