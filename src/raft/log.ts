@@ -15,6 +15,8 @@ export class Log<ValueType> {
         this.entries = [...initialEntries];
     }
 
+    // Returns the index of entries the previousEntryIdentifier refers to.
+    // Returns undefined if the there's a different term at the given index in the log.
     private entriesIndexFromPreviousEntryIdentifier(
         previousEntryIdentifier: EntryIdentifier | undefined,
     ): number | undefined {
@@ -64,6 +66,7 @@ export class Log<ValueType> {
             previousEntryIdentifier,
         );
 
+        // The entry identifier is not valid.
         if (index == null) {
             return false;
         }
