@@ -110,7 +110,7 @@ describe('Log', () => {
             ]);
         });
 
-        it('overwrites the log if the previousEntryIdentifier is somewhere in the list and the log has entries after it', () => {
+        it('overwrites the log if the previousEntryIdentifier is somewhere in the list and the log has entries after it and there is a conflict between the terms', () => {
             const log = new Log([
                 {
                     term: 1,
@@ -160,7 +160,7 @@ describe('Log', () => {
             ]);
         });
 
-        it('overwrites the whole log if the previousEntryIdentifier is undefined', () => {
+        it('overwrites the whole log if the previousEntryIdentifier is undefined and the term of the new logs is higher', () => {
             const initialEntries = [
                 {
                     term: 3,
@@ -173,14 +173,19 @@ describe('Log', () => {
                 previousEntryIdentifier: undefined,
                 entries: [
                     {
-                        term: 3,
+                        term: 4,
                         value: 'x <- 1',
                     },
                 ],
             });
 
             expect(result).toEqual(true);
-            expect(log.getEntries()).toEqual([{ term: 3, value: 'x <- 1' }]);
+            expect(log.getEntries()).toEqual([
+                {
+                    term: 4,
+                    value: 'x <- 1',
+                },
+            ]);
         });
 
         it('rejects the entries if the term of the previous entry identifier is not correct', () => {
@@ -265,5 +270,39 @@ describe('Log', () => {
 
             expect(log.getEntries()).toEqual(initialEntries);
         });
+    });
+
+    it('does not overwrite entries if they are already consistent (e.g. late delivery of a message)', () => {
+        const initialEntries = [
+            {
+                term: 1,
+                value: 'x <- 1',
+            },
+            {
+                term: 1,
+                value: 'y <- 1',
+            },
+            {
+                term: 1,
+                value: 'z <- 1',
+            },
+        ];
+        const log = new Log(initialEntries);
+
+        const result = log.appendEntries({
+            previousEntryIdentifier: {
+                term: 1,
+                index: 1,
+            },
+            entries: [
+                {
+                    value: 'y <- 1',
+                    term: 1,
+                },
+            ],
+        });
+
+        expect(result).toEqual(true);
+        expect(log.getEntries()).toEqual(initialEntries);
     });
 });

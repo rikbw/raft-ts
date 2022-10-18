@@ -15,7 +15,7 @@ export class Log<ValueType> {
         this.entries = [...initialEntries];
     }
 
-    private getIndexFromWhereToTruncateEntries(
+    private entriesIndexFromPreviousEntryIdentifier(
         previousEntryIdentifier: EntryIdentifier | undefined,
     ): number | undefined {
         if (previousEntryIdentifier == null) {
@@ -30,9 +30,29 @@ export class Log<ValueType> {
         ) {
             return index + 1;
         }
+
         return undefined;
     }
 
+    private entriesHaveNoConflictsWithRequest({
+        entries,
+        index,
+    }: {
+        entries: Entry<ValueType>[];
+        index: number;
+    }): boolean {
+        const entriesToCompare = this.entries.slice(index);
+        if (entriesToCompare.length != entries.length) {
+            return false;
+        }
+        return entries.every(
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+            (entry, index) => entriesToCompare[index]!.term === entry.term,
+        );
+    }
+
+    // The called of this method should check that the term of the appendEntries request is higher or equal than the
+    // expected term.
     public appendEntries({
         previousEntryIdentifier,
         entries,
@@ -40,7 +60,7 @@ export class Log<ValueType> {
         previousEntryIdentifier: EntryIdentifier | undefined;
         entries: Entry<ValueType>[];
     }): boolean {
-        const index = this.getIndexFromWhereToTruncateEntries(
+        const index = this.entriesIndexFromPreviousEntryIdentifier(
             previousEntryIdentifier,
         );
 
@@ -48,6 +68,16 @@ export class Log<ValueType> {
             return false;
         }
 
+        if (
+            this.entriesHaveNoConflictsWithRequest({
+                entries,
+                index,
+            })
+        ) {
+            return true;
+        }
+
+        // There's a conflict, so we have to truncate.
         this.entries = [...this.entries.slice(0, index), ...entries];
 
         return true;
