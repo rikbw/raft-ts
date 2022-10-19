@@ -97,6 +97,20 @@ describe('state', () => {
             it.todo('resets its election timeout');
         });
 
+        it('does not expect a timer to expire to send heartbeat messages', () => {
+            const state = followerState();
+            const event: Event = {
+                type: 'sendHeartbeatMessageTimeout',
+                node: 2,
+            };
+
+            expect(() =>
+                reduce(event, state),
+            ).toThrowErrorMatchingInlineSnapshot(
+                '"unreachable: did not expect a send heartbeat message timer to timeout in this state"',
+            );
+        });
+
         // A mechanism of sending a response should somehow be in the event.
         it.todo(
             'lets the calling server know that it has an outdated term when it receives an appendEntries with lower term number',
@@ -130,6 +144,20 @@ describe('state', () => {
             });
         });
 
+        it('does not expect a timer to expire to send heartbeat messages', () => {
+            const state = candidateState();
+            const event: Event = {
+                type: 'sendHeartbeatMessageTimeout',
+                node: 2,
+            };
+
+            expect(() =>
+                reduce(event, state),
+            ).toThrowErrorMatchingInlineSnapshot(
+                '"unreachable: did not expect a send heartbeat message timer to timeout in this state"',
+            );
+        });
+
         it.todo(
             'transitions to follower if it receives an appendEntries of equal or higher term',
         );
@@ -155,6 +183,33 @@ describe('state', () => {
             }).toThrowErrorMatchingInlineSnapshot(
                 '"unreachable: election timeout should not fire when you are a leader"',
             );
+        });
+
+        it('sends heartbeat messages when the timer to do so expires', () => {
+            const state = leaderState({
+                currentTerm: 2,
+            });
+            const node = 2;
+            const event: Event = {
+                type: 'sendHeartbeatMessageTimeout',
+                node,
+            };
+
+            const effects: Effect[] = [
+                {
+                    type: 'resetSendHeartbeatMessageTimeout',
+                    node,
+                },
+                {
+                    type: 'sendAppendEntries',
+                    term: 2,
+                    node,
+                },
+            ];
+            expect(reduce(event, state)).toEqual({
+                newState: state,
+                effects,
+            });
         });
 
         it.todo(

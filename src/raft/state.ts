@@ -50,6 +50,10 @@ type MutableEvent =
           type: 'electionTimeout';
       }
     | {
+          type: 'sendHeartbeatMessageTimeout';
+          node: number;
+      }
+    | {
           type: 'receivedAppendEntries';
           term: number;
           requestId: number;
@@ -60,6 +64,15 @@ export type Event = Readonly<MutableEvent>;
 type MutableEffect =
     | {
           type: 'resetElectionTimeout';
+      }
+    | {
+          type: 'resetSendHeartbeatMessageTimeout';
+          node: number;
+      }
+    | {
+          type: 'sendAppendEntries';
+          term: number;
+          node: number;
       }
     | {
           type: 'broadcastRequestVote';
@@ -92,6 +105,9 @@ export function reduce<LogValueType>(
                 term: event.term,
                 requestId: event.requestId,
             });
+
+        case 'sendHeartbeatMessageTimeout':
+            return reduceSendHeartbeatMessageTimeout(state, event.node);
 
         default:
             return unreachable(event);
@@ -169,6 +185,38 @@ function reduceReceivedAppendEntries<LogValueType>({
         case 'candidate':
         case 'leader':
             throw new Error('not implemented');
+
+        default:
+            return unreachable(state);
+    }
+}
+
+function reduceSendHeartbeatMessageTimeout<LogValueType>(
+    state: State<LogValueType>,
+    node: number,
+): ReducerResult<LogValueType> {
+    switch (state.type) {
+        case 'leader':
+            return {
+                newState: state,
+                effects: [
+                    {
+                        type: 'resetSendHeartbeatMessageTimeout',
+                        node,
+                    },
+                    {
+                        type: 'sendAppendEntries',
+                        term: state.currentTerm,
+                        node,
+                    },
+                ],
+            };
+
+        case 'candidate':
+        case 'follower':
+            throw new Error(
+                'unreachable: did not expect a send heartbeat message timer to timeout in this state',
+            );
 
         default:
             return unreachable(state);
