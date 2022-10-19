@@ -51,7 +51,7 @@ describe('state', () => {
                 currentTerm: 1,
                 log: state.log,
             });
-            const effects: Effect[] = [
+            const effects: Effect<string>[] = [
                 {
                     type: 'broadcastRequestVote',
                     term: 1,
@@ -81,7 +81,7 @@ describe('state', () => {
                 const newState = followerState({
                     currentTerm: 3,
                 });
-                const effects: Effect[] = [
+                const effects: Effect<string>[] = [
                     {
                         type: 'sendAppendEntriesResponseOk',
                         node,
@@ -128,7 +128,7 @@ describe('state', () => {
             const newState = candidateState({
                 currentTerm: 3,
             });
-            const effects: Effect[] = [
+            const effects: Effect<string>[] = [
                 {
                     type: 'broadcastRequestVote',
                     term: 3,
@@ -194,7 +194,7 @@ describe('state', () => {
                 node,
             };
 
-            const effects: Effect[] = [
+            const effects: Effect<string>[] = [
                 {
                     type: 'resetSendHeartbeatMessageTimeout',
                     node,
@@ -204,6 +204,7 @@ describe('state', () => {
                     term: 2,
                     node,
                     previousEntryIdentifier: undefined,
+                    entries: [],
                 },
             ];
             expect(reduce(event, state)).toEqual({
@@ -213,7 +214,7 @@ describe('state', () => {
         });
 
         describe('if a node replies that appendEntries is not ok', () => {
-            it('decrements lastIndex', () => {
+            it('decrements lastIndex and sends the relevant parts of the log', () => {
                 const state = leaderState({
                     currentTerm: 2,
                     log: new Log<string>([
@@ -243,7 +244,7 @@ describe('state', () => {
                         },
                     },
                 });
-                const effects: Effect[] = [
+                const effects: Effect<string>[] = [
                     {
                         type: 'resetSendHeartbeatMessageTimeout',
                         node,
@@ -256,6 +257,12 @@ describe('state', () => {
                             index: 0,
                             term: 1,
                         },
+                        entries: [
+                            {
+                                value: 'y <- 2',
+                                term: 2,
+                            },
+                        ],
                     },
                 ];
                 expect(reduce(event, state)).toEqual({
@@ -294,7 +301,7 @@ describe('state', () => {
                         },
                     },
                 });
-                const effects: Effect[] = [
+                const effects: Effect<string>[] = [
                     {
                         type: 'resetSendHeartbeatMessageTimeout',
                         node,
@@ -304,6 +311,16 @@ describe('state', () => {
                         term: 2,
                         node,
                         previousEntryIdentifier: undefined,
+                        entries: [
+                            {
+                                value: 'x <- 1',
+                                term: 1
+                            },
+                            {
+                                value: 'y <- 2',
+                                term: 2
+                            }
+                        ]
                     },
                 ];
                 expect(reduce(event, state)).toEqual({

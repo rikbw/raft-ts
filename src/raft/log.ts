@@ -3,7 +3,7 @@ export type EntryIdentifier = {
     term: number;
 };
 
-type Entry<ValueType> = {
+export type Entry<ValueType> = {
     term: number;
     value: ValueType;
 };

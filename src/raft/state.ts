@@ -1,5 +1,5 @@
 import { unreachable } from '../util/unreachable';
-import { EntryIdentifier, Log } from './log';
+import { Entry, EntryIdentifier, Log } from './log';
 
 type FollowerInfo = Record<number, { nextIndex: number }>;
 
@@ -69,7 +69,7 @@ type MutableEvent =
 
 export type Event = Readonly<MutableEvent>;
 
-type MutableEffect =
+type MutableEffect<LogValueType> =
     | {
           type: 'resetElectionTimeout';
       }
@@ -82,6 +82,7 @@ type MutableEffect =
           previousEntryIdentifier: EntryIdentifier | undefined;
           term: number;
           node: number;
+          entries: Array<Entry<LogValueType>>;
       }
     | {
           type: 'broadcastRequestVote';
@@ -98,11 +99,11 @@ type MutableEffect =
           node: number;
       };
 
-export type Effect = Readonly<MutableEffect>;
+export type Effect<LogValueType> = Readonly<MutableEffect<LogValueType>>;
 
 type ReducerResult<LogValueType> = {
     newState: State<LogValueType>;
-    effects: Effect[];
+    effects: Effect<LogValueType>[];
 };
 
 export function reduce<LogValueType>(
@@ -212,13 +213,25 @@ function reduceReceivedAppendEntries<LogValueType>({
     }
 }
 
-function previousEntryIdentifierFromFollowerInfo<ValueType>(
-    state: LeaderState<ValueType>,
+function nextIndexForNode<LogValueType>(
+    state: LeaderState<LogValueType>,
     node: number,
-): EntryIdentifier | undefined {
+): number {
     const { followerInfo, log } = state;
     const nodeInfo = followerInfo[node];
     const nextIndex = nodeInfo?.nextIndex ?? log.getEntries().length;
+
+    if (nextIndex < 0) {
+        throw new Error('unexpected error: nextIndex is smaller than zero');
+    }
+
+    return nextIndex;
+}
+
+function previousEntryIdentifierFromNextIndex<ValueType>(
+    state: LeaderState<ValueType>,
+    nextIndex: number,
+): EntryIdentifier | undefined {
     const previousLogIndex = nextIndex - 1;
 
     if (previousLogIndex < 0) {
@@ -226,7 +239,7 @@ function previousEntryIdentifierFromFollowerInfo<ValueType>(
     }
 
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    const previousLogTerm = log.getEntries()[previousLogIndex]!.term;
+    const previousLogTerm = state.log.getEntries()[previousLogIndex]!.term;
 
     return {
         index: previousLogIndex,
@@ -239,7 +252,9 @@ function reduceSendHeartbeatMessageTimeout<LogValueType>(
     node: number,
 ): ReducerResult<LogValueType> {
     switch (state.type) {
-        case 'leader':
+        case 'leader': {
+            const nextIndex = nextIndexForNode(state, node);
+            const entries = state.log.getEntries().slice(nextIndex);
             return {
                 newState: state,
                 effects: [
@@ -253,13 +268,15 @@ function reduceSendHeartbeatMessageTimeout<LogValueType>(
                         node,
                         // TODO test this value
                         previousEntryIdentifier:
-                            previousEntryIdentifierFromFollowerInfo(
+                            previousEntryIdentifierFromNextIndex(
                                 state,
-                                node,
+                                nextIndex,
                             ),
+                        entries,
                     },
                 ],
             };
+        }
 
         case 'candidate':
         case 'follower':
@@ -301,11 +318,16 @@ function receivedAppendEntriesResultNotOk<LogValueType>({
                 followerInfo: {
                     ...state.followerInfo,
                     [node]: {
-                        nextIndex: Math.max(prevLogIndex, (state.followerInfo[node]?.nextIndex ?? 0) - 1)
+                        nextIndex: Math.max(
+                            prevLogIndex,
+                            (state.followerInfo[node]?.nextIndex ?? 0) - 1,
+                        ),
                     },
                 },
             };
 
+            const nextIndex = nextIndexForNode(newState, node);
+            const entries = state.log.getEntries().slice(nextIndex);
             return {
                 newState,
                 effects: [
@@ -318,10 +340,11 @@ function receivedAppendEntriesResultNotOk<LogValueType>({
                         term: state.currentTerm,
                         node,
                         previousEntryIdentifier:
-                            previousEntryIdentifierFromFollowerInfo(
+                            previousEntryIdentifierFromNextIndex(
                                 newState,
-                                node,
+                                nextIndex,
                             ),
+                        entries,
                     },
                 ],
             };
