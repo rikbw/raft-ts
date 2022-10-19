@@ -29,10 +29,12 @@ const candidateState = ({
 const leaderState = ({
     currentTerm = 0,
     log = new Log([]),
+    followerInfo = {},
 }: Partial<LeaderState<string>> = {}): LeaderState<string> => ({
     type: 'leader',
     currentTerm,
     log,
+    followerInfo,
 });
 
 describe('state', () => {
@@ -69,9 +71,11 @@ describe('state', () => {
                 const state = followerState({
                     currentTerm: 2,
                 });
+                const node = 1;
                 const event: Event = {
                     type: 'receivedAppendEntries',
                     term: 3,
+                    node,
                 };
 
                 const newState = followerState({
@@ -79,9 +83,8 @@ describe('state', () => {
                 });
                 const effects: Effect[] = [
                     {
-                        type: 'sendAppendEntriesResponse',
-                        ok: true,
-                        term: 3,
+                        type: 'sendAppendEntriesResponseOk',
+                        node,
                     },
                 ];
                 expect(reduce(event, state)).toEqual({
@@ -200,11 +203,113 @@ describe('state', () => {
                     type: 'sendAppendEntries',
                     term: 2,
                     node,
+                    previousEntryIdentifier: undefined,
                 },
             ];
             expect(reduce(event, state)).toEqual({
                 newState: state,
                 effects,
+            });
+        });
+
+        describe('if a node replies that appendEntries is not ok', () => {
+            it('decrements lastIndex', () => {
+                const state = leaderState({
+                    currentTerm: 2,
+                    log: new Log<string>([
+                        {
+                            value: 'x <- 1',
+                            term: 1,
+                        },
+                        {
+                            value: 'y <- 2',
+                            term: 2,
+                        },
+                    ]),
+                });
+                const node = 4;
+                const event: Event = {
+                    type: 'receivedAppendEntriesResultNotOk',
+                    prevLogIndex: 1,
+                    term: 2,
+                    node,
+                };
+
+                const newState = leaderState({
+                    ...state,
+                    followerInfo: {
+                        [node]: {
+                            nextIndex: 1,
+                        },
+                    },
+                });
+                const effects: Effect[] = [
+                    {
+                        type: 'resetSendHeartbeatMessageTimeout',
+                        node,
+                    },
+                    {
+                        type: 'sendAppendEntries',
+                        term: 2,
+                        node,
+                        previousEntryIdentifier: {
+                            index: 0,
+                            term: 1,
+                        },
+                    },
+                ];
+                expect(reduce(event, state)).toEqual({
+                    newState,
+                    effects,
+                });
+            });
+
+            it('uses null as an indicator of the beginning of the log', () => {
+                const state = leaderState({
+                    currentTerm: 2,
+                    log: new Log<string>([
+                        {
+                            value: 'x <- 1',
+                            term: 1,
+                        },
+                        {
+                            value: 'y <- 2',
+                            term: 2,
+                        },
+                    ]),
+                });
+                const node = 4;
+                const event: Event = {
+                    type: 'receivedAppendEntriesResultNotOk',
+                    prevLogIndex: 0,
+                    term: 2,
+                    node,
+                };
+
+                const newState = leaderState({
+                    ...state,
+                    followerInfo: {
+                        [node]: {
+                            nextIndex: 0,
+                        },
+                    },
+                });
+                const effects: Effect[] = [
+                    {
+                        type: 'resetSendHeartbeatMessageTimeout',
+                        node,
+                    },
+                    {
+                        type: 'sendAppendEntries',
+                        term: 2,
+                        node,
+                        previousEntryIdentifier: undefined,
+                    },
+                ];
+                expect(reduce(event, state)).toEqual({
+                    newState,
+                    effects,
+                });
             });
         });
 

@@ -1,5 +1,7 @@
 import { unreachable } from '../util/unreachable';
-import { Log } from './log';
+import { EntryIdentifier, Log } from './log';
+
+type FollowerInfo = Record<number, { nextIndex: number }>;
 
 type MutableState<LogValueType> =
     | {
@@ -11,6 +13,7 @@ type MutableState<LogValueType> =
           type: 'leader';
           currentTerm: number;
           log: Log<LogValueType>;
+          followerInfo: FollowerInfo;
       }
     | {
           type: 'candidate';
@@ -51,6 +54,17 @@ type MutableEvent =
     | {
           type: 'receivedAppendEntries';
           term: number;
+          node: number;
+      }
+    | {
+          type: 'receivedAppendEntriesResultOk';
+          node: number;
+      }
+    | {
+          type: 'receivedAppendEntriesResultNotOk';
+          prevLogIndex: number;
+          term: number;
+          node: number;
       };
 
 export type Event = Readonly<MutableEvent>;
@@ -65,6 +79,7 @@ type MutableEffect =
       }
     | {
           type: 'sendAppendEntries';
+          previousEntryIdentifier: EntryIdentifier | undefined;
           term: number;
           node: number;
       }
@@ -73,9 +88,14 @@ type MutableEffect =
           term: number;
       }
     | {
-          type: 'sendAppendEntriesResponse';
-          ok: boolean;
+          type: 'sendAppendEntriesResponseOk';
+          node: number;
+      }
+    | {
+          type: 'sendAppendEntriesResponseNotOk';
+          prevLogIndex: number;
           term: number;
+          node: number;
       };
 
 export type Effect = Readonly<MutableEffect>;
@@ -97,10 +117,22 @@ export function reduce<LogValueType>(
             return reduceReceivedAppendEntries({
                 state,
                 term: event.term,
+                node: event.node,
             });
 
         case 'sendHeartbeatMessageTimeout':
             return reduceSendHeartbeatMessageTimeout(state, event.node);
+
+        case 'receivedAppendEntriesResultOk':
+            throw new Error('not implemented');
+
+        case 'receivedAppendEntriesResultNotOk':
+            return receivedAppendEntriesResultNotOk({
+                state,
+                prevLogIndex: event.prevLogIndex,
+                term: event.term,
+                node: event.node,
+            });
 
         default:
             return unreachable(event);
@@ -144,9 +176,11 @@ function reduceElectionTimeout<LogValueType>(
 function reduceReceivedAppendEntries<LogValueType>({
     state,
     term,
+    node,
 }: {
     state: State<LogValueType>;
     term: number;
+    node: number;
 }): ReducerResult<LogValueType> {
     switch (state.type) {
         case 'follower': {
@@ -159,9 +193,8 @@ function reduceReceivedAppendEntries<LogValueType>({
                     },
                     effects: [
                         {
-                            type: 'sendAppendEntriesResponse',
-                            ok: true,
-                            term,
+                            type: 'sendAppendEntriesResponseOk',
+                            node,
                         },
                     ],
                 };
@@ -177,6 +210,28 @@ function reduceReceivedAppendEntries<LogValueType>({
         default:
             return unreachable(state);
     }
+}
+
+function previousEntryIdentifierFromFollowerInfo<ValueType>(
+    state: LeaderState<ValueType>,
+    node: number,
+): EntryIdentifier | undefined {
+    const { followerInfo, log } = state;
+    const nodeInfo = followerInfo[node];
+    const nextIndex = nodeInfo?.nextIndex ?? log.getEntries().length;
+    const previousLogIndex = nextIndex - 1;
+
+    if (previousLogIndex < 0) {
+        return undefined;
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    const previousLogTerm = log.getEntries()[previousLogIndex]!.term;
+
+    return {
+        index: previousLogIndex,
+        term: previousLogTerm,
+    };
 }
 
 function reduceSendHeartbeatMessageTimeout<LogValueType>(
@@ -196,6 +251,12 @@ function reduceSendHeartbeatMessageTimeout<LogValueType>(
                         type: 'sendAppendEntries',
                         term: state.currentTerm,
                         node,
+                        // TODO test this value
+                        previousEntryIdentifier:
+                            previousEntryIdentifierFromFollowerInfo(
+                                state,
+                                node,
+                            ),
                     },
                 ],
             };
@@ -204,6 +265,72 @@ function reduceSendHeartbeatMessageTimeout<LogValueType>(
         case 'follower':
             throw new Error(
                 'unreachable: did not expect a send heartbeat message timer to timeout in this state',
+            );
+
+        default:
+            return unreachable(state);
+    }
+}
+
+function receivedAppendEntriesResultNotOk<LogValueType>({
+    state,
+    prevLogIndex,
+    term,
+    node,
+}: {
+    state: State<LogValueType>;
+    prevLogIndex: number;
+    term: number;
+    node: number;
+}): ReducerResult<LogValueType> {
+    switch (state.type) {
+        case 'leader': {
+            if (term > state.currentTerm) {
+                return {
+                    newState: {
+                        type: 'follower',
+                        log: state.log,
+                        currentTerm: term,
+                    },
+                    effects: [],
+                };
+            }
+
+            const newState: LeaderState<LogValueType> = {
+                ...state,
+                followerInfo: {
+                    ...state.followerInfo,
+                    [node]: {
+                        nextIndex: Math.max(prevLogIndex, (state.followerInfo[node]?.nextIndex ?? 0) - 1)
+                    },
+                },
+            };
+
+            return {
+                newState,
+                effects: [
+                    {
+                        type: 'resetSendHeartbeatMessageTimeout',
+                        node,
+                    },
+                    {
+                        type: 'sendAppendEntries',
+                        term: state.currentTerm,
+                        node,
+                        previousEntryIdentifier:
+                            previousEntryIdentifierFromFollowerInfo(
+                                newState,
+                                node,
+                            ),
+                    },
+                ],
+            };
+        }
+
+        case 'follower':
+        case 'candidate':
+            throw new Error(
+                'unreachable: did not expect to receive a response to append entries in this state',
             );
 
         default:

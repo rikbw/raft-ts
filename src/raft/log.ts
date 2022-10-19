@@ -1,4 +1,4 @@
-type EntryIdentifier = {
+export type EntryIdentifier = {
     index: number;
     term: number;
 };
