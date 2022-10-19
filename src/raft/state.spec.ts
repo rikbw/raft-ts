@@ -72,7 +72,6 @@ describe('state', () => {
                 const event: Event = {
                     type: 'receivedAppendEntries',
                     term: 3,
-                    requestId: 23,
                 };
 
                 const newState = followerState({
@@ -80,12 +79,9 @@ describe('state', () => {
                 });
                 const effects: Effect[] = [
                     {
-                        type: 'response',
-                        requestId: 23,
-                        result: {
-                            type: 'appendEntriesResult',
-                            ok: true,
-                        },
+                        type: 'sendAppendEntriesResponse',
+                        ok: true,
+                        term: 3,
                     },
                 ];
                 expect(reduce(event, state)).toEqual({

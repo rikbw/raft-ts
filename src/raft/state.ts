@@ -40,11 +40,6 @@ export function getInitialState<LogValueType>(
     };
 }
 
-type Response = {
-    type: 'appendEntriesResult';
-    ok: boolean;
-};
-
 type MutableEvent =
     | {
           type: 'electionTimeout';
@@ -56,7 +51,6 @@ type MutableEvent =
     | {
           type: 'receivedAppendEntries';
           term: number;
-          requestId: number;
       };
 
 export type Event = Readonly<MutableEvent>;
@@ -79,9 +73,9 @@ type MutableEffect =
           term: number;
       }
     | {
-          type: 'response';
-          result: Response;
-          requestId: number;
+          type: 'sendAppendEntriesResponse';
+          ok: boolean;
+          term: number;
       };
 
 export type Effect = Readonly<MutableEffect>;
@@ -103,7 +97,6 @@ export function reduce<LogValueType>(
             return reduceReceivedAppendEntries({
                 state,
                 term: event.term,
-                requestId: event.requestId,
             });
 
         case 'sendHeartbeatMessageTimeout':
@@ -151,11 +144,9 @@ function reduceElectionTimeout<LogValueType>(
 function reduceReceivedAppendEntries<LogValueType>({
     state,
     term,
-    requestId,
 }: {
     state: State<LogValueType>;
     term: number;
-    requestId: number;
 }): ReducerResult<LogValueType> {
     switch (state.type) {
         case 'follower': {
@@ -168,12 +159,9 @@ function reduceReceivedAppendEntries<LogValueType>({
                     },
                     effects: [
                         {
-                            type: 'response',
-                            result: {
-                                type: 'appendEntriesResult',
-                                ok: true,
-                            },
-                            requestId,
+                            type: 'sendAppendEntriesResponse',
+                            ok: true,
+                            term,
                         },
                     ],
                 };
