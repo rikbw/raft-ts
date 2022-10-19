@@ -31,7 +31,7 @@ describe('state', () => {
         });
 
         describe('when it receives appendEntries with an equal or higher term number', () => {
-            it('updates its term', () => {
+            it('updates its term and acknowledges the receival', () => {
                 const state: State = {
                     type: 'follower',
                     currentTerm: 2,
@@ -39,19 +39,28 @@ describe('state', () => {
                 const event: Event = {
                     type: 'receivedAppendEntries',
                     term: 3,
+                    requestId: 23,
                 };
 
                 const newState: State = {
                     type: 'follower',
                     currentTerm: 3,
                 };
+                const effects: Effect[] = [
+                    {
+                        type: 'response',
+                        requestId: 23,
+                        result: {
+                            type: 'appendEntriesResult',
+                            ok: true
+                        },
+                    },
+                ];
                 expect(reduce(event, state)).toEqual({
                     newState,
-                    effects: expect.any(Array),
+                    effects,
                 });
             });
-
-            it.todo('acknowledges the receival');
 
             it.todo('resets its election timeout');
         });

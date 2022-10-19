@@ -21,6 +21,11 @@ export const initialState: State = {
     currentTerm: 0,
 };
 
+type Response = {
+    type: 'appendEntriesResult';
+    ok: boolean;
+};
+
 type MutableEvent =
     | {
           type: 'electionTimeout';
@@ -28,6 +33,7 @@ type MutableEvent =
     | {
           type: 'receivedAppendEntries';
           term: number;
+          requestId: number;
       };
 
 export type Event = Readonly<MutableEvent>;
@@ -39,6 +45,11 @@ type MutableEffect =
     | {
           type: 'broadcastRequestVote';
           term: number;
+      }
+    | {
+          type: 'response';
+          result: Response;
+          requestId: number;
       };
 
 export type Effect = Readonly<MutableEffect>;
@@ -54,7 +65,11 @@ export function reduce(event: Event, state: State): ReducerResult {
             return reduceElectionTimeout(state);
 
         case 'receivedAppendEntries':
-            return reduceReceivedAppendEntries(state, event.term);
+            return reduceReceivedAppendEntries({
+                state,
+                term: event.term,
+                requestId: event.requestId,
+            });
 
         default:
             return unreachable(event);
@@ -92,10 +107,15 @@ function reduceElectionTimeout(state: State): ReducerResult {
     }
 }
 
-function reduceReceivedAppendEntries(
-    state: State,
-    term: number,
-): ReducerResult {
+function reduceReceivedAppendEntries({
+    state,
+    term,
+    requestId,
+}: {
+    state: State;
+    term: number;
+    requestId: number;
+}): ReducerResult {
     switch (state.type) {
         case 'follower': {
             if (term > state.currentTerm) {
@@ -104,7 +124,16 @@ function reduceReceivedAppendEntries(
                         type: 'follower',
                         currentTerm: term,
                     },
-                    effects: [],
+                    effects: [
+                        {
+                            type: 'response',
+                            result: {
+                                type: 'appendEntriesResult',
+                                ok: true,
+                            },
+                            requestId,
+                        },
+                    ],
                 };
             }
 
