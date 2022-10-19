@@ -43,7 +43,7 @@ export function getInitialState<LogValueType>(
     };
 }
 
-type MutableEvent =
+type MutableEvent<LogValueType> =
     | {
           type: 'electionTimeout';
       }
@@ -55,6 +55,8 @@ type MutableEvent =
           type: 'receivedAppendEntries';
           term: number;
           node: number;
+          entries: Array<Entry<LogValueType>>;
+          previousEntryIdentifier: EntryIdentifier | undefined;
       }
     | {
           type: 'receivedAppendEntriesResultOk';
@@ -67,7 +69,7 @@ type MutableEvent =
           node: number;
       };
 
-export type Event = Readonly<MutableEvent>;
+export type Event<LogValueType> = Readonly<MutableEvent<LogValueType>>;
 
 type MutableEffect<LogValueType> =
     | {
@@ -107,7 +109,7 @@ type ReducerResult<LogValueType> = {
 };
 
 export function reduce<LogValueType>(
-    event: Event,
+    event: Event<LogValueType>,
     state: State<LogValueType>,
 ): ReducerResult<LogValueType> {
     switch (event.type) {
@@ -119,6 +121,8 @@ export function reduce<LogValueType>(
                 state,
                 term: event.term,
                 node: event.node,
+                entries: event.entries,
+                previousEntryIdentifier: event.previousEntryIdentifier,
             });
 
         case 'sendHeartbeatMessageTimeout':
@@ -178,20 +182,46 @@ function reduceReceivedAppendEntries<LogValueType>({
     state,
     term,
     node,
+    previousEntryIdentifier,
+    entries,
 }: {
     state: State<LogValueType>;
     term: number;
     node: number;
+    previousEntryIdentifier: EntryIdentifier | undefined;
+    entries: Entry<LogValueType>[];
 }): ReducerResult<LogValueType> {
     switch (state.type) {
         case 'follower': {
+            if (term < state.currentTerm) {
+                return {
+                    newState: state,
+                    effects: [
+                        {
+                            type: 'sendAppendEntriesResponseNotOk',
+                            node,
+                            term: state.currentTerm,
+                            // Doesn't matter, the receiver will step down as a leader.
+                            prevLogIndex: 0,
+                        },
+                    ],
+                };
+            }
+
+            state.log.appendEntries({
+                previousEntryIdentifier,
+                entries,
+            });
+
+            const newState: State<LogValueType> = {
+                type: 'follower',
+                currentTerm: term,
+                log: state.log,
+            };
+
             if (term > state.currentTerm) {
                 return {
-                    newState: {
-                        type: 'follower',
-                        currentTerm: term,
-                        log: state.log,
-                    },
+                    newState,
                     effects: [
                         {
                             type: 'sendAppendEntriesResponseOk',
@@ -201,7 +231,10 @@ function reduceReceivedAppendEntries<LogValueType>({
                 };
             }
 
-            throw new Error('not implemented');
+            return {
+                newState,
+                effects: [],
+            };
         }
 
         case 'candidate':

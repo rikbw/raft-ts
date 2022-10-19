@@ -43,7 +43,7 @@ describe('state', () => {
             const state = followerState({
                 currentTerm: 0,
             });
-            const event: Event = {
+            const event: Event<string> = {
                 type: 'electionTimeout',
             };
 
@@ -72,10 +72,12 @@ describe('state', () => {
                     currentTerm: 2,
                 });
                 const node = 1;
-                const event: Event = {
+                const event: Event<string> = {
                     type: 'receivedAppendEntries',
                     term: 3,
                     node,
+                    entries: [],
+                    previousEntryIdentifier: undefined,
                 };
 
                 const newState = followerState({
@@ -93,12 +95,54 @@ describe('state', () => {
                 });
             });
 
+            it('appends to its log', () => {
+                const state = followerState({
+                    currentTerm: 2,
+                    log: new Log([]),
+                });
+                const node = 1;
+                const event: Event<string> = {
+                    type: 'receivedAppendEntries',
+                    term: 2,
+                    node,
+                    previousEntryIdentifier: undefined,
+                    entries: [
+                        {
+                            term: 1,
+                            value: 'w <- 2',
+                        },
+                        {
+                            term: 1,
+                            value: 'x <- 4',
+                        },
+                    ],
+                };
+
+                const newState = followerState({
+                    ...state,
+                    log: new Log([
+                        {
+                            term: 1,
+                            value: 'w <- 2',
+                        },
+                        {
+                            term: 1,
+                            value: 'x <- 4',
+                        },
+                    ]),
+                });
+                expect(reduce(event, state)).toEqual({
+                    newState,
+                    effects: [],
+                });
+            });
+
             it.todo('resets its election timeout');
         });
 
         it('does not expect a timer to expire to send heartbeat messages', () => {
             const state = followerState();
-            const event: Event = {
+            const event: Event<string> = {
                 type: 'sendHeartbeatMessageTimeout',
                 node: 2,
             };
@@ -121,7 +165,7 @@ describe('state', () => {
             const state = candidateState({
                 currentTerm: 2,
             });
-            const event: Event = {
+            const event: Event<string> = {
                 type: 'electionTimeout',
             };
 
@@ -145,7 +189,7 @@ describe('state', () => {
 
         it('does not expect a timer to expire to send heartbeat messages', () => {
             const state = candidateState();
-            const event: Event = {
+            const event: Event<string> = {
                 type: 'sendHeartbeatMessageTimeout',
                 node: 2,
             };
@@ -173,7 +217,7 @@ describe('state', () => {
             const state = leaderState({
                 currentTerm: 5,
             });
-            const event: Event = {
+            const event: Event<string> = {
                 type: 'electionTimeout',
             };
 
@@ -189,7 +233,7 @@ describe('state', () => {
                 currentTerm: 2,
             });
             const node = 2;
-            const event: Event = {
+            const event: Event<string> = {
                 type: 'sendHeartbeatMessageTimeout',
                 node,
             };
@@ -229,7 +273,7 @@ describe('state', () => {
                     ]),
                 });
                 const node = 4;
-                const event: Event = {
+                const event: Event<string> = {
                     type: 'receivedAppendEntriesResultNotOk',
                     prevLogIndex: 1,
                     term: 2,
@@ -286,7 +330,7 @@ describe('state', () => {
                     ]),
                 });
                 const node = 4;
-                const event: Event = {
+                const event: Event<string> = {
                     type: 'receivedAppendEntriesResultNotOk',
                     prevLogIndex: 0,
                     term: 2,
@@ -314,13 +358,13 @@ describe('state', () => {
                         entries: [
                             {
                                 value: 'x <- 1',
-                                term: 1
+                                term: 1,
                             },
                             {
                                 value: 'y <- 2',
-                                term: 2
-                            }
-                        ]
+                                term: 2,
+                            },
+                        ],
                     },
                 ];
                 expect(reduce(event, state)).toEqual({
