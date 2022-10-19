@@ -1,25 +1,44 @@
 import { unreachable } from '../util/unreachable';
+import { Log } from './log';
 
-type MutableState =
+type MutableState<LogValueType> =
     | {
           type: 'follower';
           currentTerm: number;
+          log: Log<LogValueType>;
       }
     | {
           type: 'leader';
           currentTerm: number;
+          log: Log<LogValueType>;
       }
     | {
           type: 'candidate';
           currentTerm: number;
+          log: Log<LogValueType>;
       };
 
-export type State = Readonly<MutableState>;
+export type State<LogValueType> = Readonly<MutableState<LogValueType>>;
 
-export const initialState: State = {
-    type: 'follower',
-    currentTerm: 0,
+export type FollowerState<LogValueType> = State<LogValueType> & {
+    type: 'follower';
 };
+export type LeaderState<LogValueType> = State<LogValueType> & {
+    type: 'leader';
+};
+export type CandidateState<LogValueType> = State<LogValueType> & {
+    type: 'candidate';
+};
+
+export function getInitialState<LogValueType>(
+    log: Log<LogValueType>,
+): State<LogValueType> {
+    return {
+        type: 'follower',
+        currentTerm: 0,
+        log,
+    };
+}
 
 type Response = {
     type: 'appendEntriesResult';
@@ -54,12 +73,15 @@ type MutableEffect =
 
 export type Effect = Readonly<MutableEffect>;
 
-type ReducerResult = {
-    newState: State;
+type ReducerResult<LogValueType> = {
+    newState: State<LogValueType>;
     effects: Effect[];
 };
 
-export function reduce(event: Event, state: State): ReducerResult {
+export function reduce<LogValueType>(
+    event: Event,
+    state: State<LogValueType>,
+): ReducerResult<LogValueType> {
     switch (event.type) {
         case 'electionTimeout':
             return reduceElectionTimeout(state);
@@ -76,7 +98,9 @@ export function reduce(event: Event, state: State): ReducerResult {
     }
 }
 
-function reduceElectionTimeout(state: State): ReducerResult {
+function reduceElectionTimeout<LogValueType>(
+    state: State<LogValueType>,
+): ReducerResult<LogValueType> {
     switch (state.type) {
         case 'leader':
             throw new Error(
@@ -89,6 +113,7 @@ function reduceElectionTimeout(state: State): ReducerResult {
                 newState: {
                     type: 'candidate',
                     currentTerm: newTerm,
+                    log: state.log,
                 },
                 effects: [
                     {
@@ -107,15 +132,15 @@ function reduceElectionTimeout(state: State): ReducerResult {
     }
 }
 
-function reduceReceivedAppendEntries({
+function reduceReceivedAppendEntries<LogValueType>({
     state,
     term,
     requestId,
 }: {
-    state: State;
+    state: State<LogValueType>;
     term: number;
     requestId: number;
-}): ReducerResult {
+}): ReducerResult<LogValueType> {
     switch (state.type) {
         case 'follower': {
             if (term > state.currentTerm) {
@@ -123,6 +148,7 @@ function reduceReceivedAppendEntries({
                     newState: {
                         type: 'follower',
                         currentTerm: term,
+                        log: state.log,
                     },
                     effects: [
                         {

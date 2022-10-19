@@ -1,20 +1,54 @@
-import { State, Event, reduce, Effect } from './state';
+import {
+    Event,
+    reduce,
+    Effect,
+    FollowerState,
+    CandidateState,
+    LeaderState,
+} from './state';
+import { Log } from './log';
+
+const followerState = ({
+    currentTerm = 0,
+    log = new Log([]),
+}: Partial<FollowerState<string>> = {}): FollowerState<string> => ({
+    type: 'follower',
+    currentTerm,
+    log,
+});
+
+const candidateState = ({
+    currentTerm = 0,
+    log = new Log([]),
+}: Partial<CandidateState<string>> = {}): CandidateState<string> => ({
+    type: 'candidate',
+    currentTerm,
+    log,
+});
+
+const leaderState = ({
+    currentTerm = 0,
+    log = new Log([]),
+}: Partial<LeaderState<string>> = {}): LeaderState<string> => ({
+    type: 'leader',
+    currentTerm,
+    log,
+});
 
 describe('state', () => {
     describe('follower', () => {
         it('transitions to candidate and requests votes when election timeout fires', () => {
-            const state: State = {
-                type: 'follower',
+            const state = followerState({
                 currentTerm: 0,
-            };
+            });
             const event: Event = {
                 type: 'electionTimeout',
             };
 
-            const newState: State = {
-                type: 'candidate',
+            const newState = candidateState({
                 currentTerm: 1,
-            };
+                log: state.log,
+            });
             const effects: Effect[] = [
                 {
                     type: 'broadcastRequestVote',
@@ -32,27 +66,25 @@ describe('state', () => {
 
         describe('when it receives appendEntries with an equal or higher term number', () => {
             it('updates its term and acknowledges the receival', () => {
-                const state: State = {
-                    type: 'follower',
+                const state = followerState({
                     currentTerm: 2,
-                };
+                });
                 const event: Event = {
                     type: 'receivedAppendEntries',
                     term: 3,
                     requestId: 23,
                 };
 
-                const newState: State = {
-                    type: 'follower',
+                const newState = followerState({
                     currentTerm: 3,
-                };
+                });
                 const effects: Effect[] = [
                     {
                         type: 'response',
                         requestId: 23,
                         result: {
                             type: 'appendEntriesResult',
-                            ok: true
+                            ok: true,
                         },
                     },
                 ];
@@ -73,18 +105,16 @@ describe('state', () => {
 
     describe('candidate', () => {
         it('starts a new voting term when election timeout fires', () => {
-            const state: State = {
-                type: 'candidate',
+            const state = candidateState({
                 currentTerm: 2,
-            };
+            });
             const event: Event = {
                 type: 'electionTimeout',
             };
 
-            const newState: State = {
-                type: 'candidate',
+            const newState = candidateState({
                 currentTerm: 3,
-            };
+            });
             const effects: Effect[] = [
                 {
                     type: 'broadcastRequestVote',
@@ -113,10 +143,9 @@ describe('state', () => {
 
     describe('leader', () => {
         it('does not expect an election timeout', () => {
-            const state: State = {
-                type: 'leader',
+            const state = leaderState({
                 currentTerm: 5,
-            };
+            });
             const event: Event = {
                 type: 'electionTimeout',
             };
