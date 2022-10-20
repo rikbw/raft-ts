@@ -13,11 +13,13 @@ const followerState = ({
     currentTerm = 0,
     log = new Log([]),
     otherClusterNodes = [],
+    votedFor = undefined,
 }: Partial<FollowerState<string>> = {}): FollowerState<string> => ({
     type: 'follower',
     currentTerm,
     log,
     otherClusterNodes,
+    votedFor,
 });
 
 const candidateState = ({
@@ -278,6 +280,175 @@ describe('state', () => {
             expect(reduce(event, state)).toEqual({
                 newState: state,
                 effects,
+            });
+        });
+
+        describe('when it receives requestVote', () => {
+            it('votes for the server if it has not voted before', () => {
+                const state = followerState({
+                    currentTerm: 0,
+                    votedFor: undefined,
+                });
+                const event: Event<string> = {
+                    type: 'receivedMessageFromNode',
+                    node: 0,
+                    message: {
+                        type: 'requestVote',
+                        term: 1,
+                    },
+                };
+
+                const newState = followerState({
+                    currentTerm: 1,
+                    votedFor: 0,
+                });
+                const effects: Array<Effect<string>> = [
+                    {
+                        type: 'sendMessageToNode',
+                        node: 0,
+                        message: {
+                            type: 'requestVoteResponse',
+                            voteGranted: true,
+                            term: 1,
+                        },
+                    },
+                ];
+                expect(reduce(event, state)).toEqual({
+                    newState,
+                    effects,
+                });
+            });
+
+            it('votes for the same server again', () => {
+                const state = followerState({
+                    currentTerm: 0,
+                    votedFor: 0,
+                });
+                const event: Event<string> = {
+                    type: 'receivedMessageFromNode',
+                    node: 0,
+                    message: {
+                        type: 'requestVote',
+                        term: 1,
+                    },
+                };
+
+                const newState = followerState({
+                    currentTerm: 1,
+                    votedFor: 0,
+                });
+                const effects: Array<Effect<string>> = [
+                    {
+                        type: 'sendMessageToNode',
+                        node: 0,
+                        message: {
+                            type: 'requestVoteResponse',
+                            voteGranted: true,
+                            term: 1,
+                        },
+                    },
+                ];
+                expect(reduce(event, state)).toEqual({
+                    newState,
+                    effects,
+                });
+            });
+
+            it('does not vote for a different server this term', () => {
+                const state = followerState({
+                    currentTerm: 1,
+                    votedFor: 0,
+                });
+                const event: Event<string> = {
+                    type: 'receivedMessageFromNode',
+                    node: 1,
+                    message: {
+                        type: 'requestVote',
+                        term: 1,
+                    },
+                };
+
+                const effects: Array<Effect<string>> = [
+                    {
+                        type: 'sendMessageToNode',
+                        node: 1,
+                        message: {
+                            type: 'requestVoteResponse',
+                            voteGranted: false,
+                            term: 1,
+                        },
+                    },
+                ];
+                expect(reduce(event, state)).toEqual({
+                    newState: state,
+                    effects,
+                });
+            });
+
+            it('does not vote for an outdated term (e.g. very late delivery of message)', () => {
+                const state = followerState({
+                    currentTerm: 2,
+                    votedFor: 2,
+                });
+                const event: Event<string> = {
+                    type: 'receivedMessageFromNode',
+                    node: 2,
+                    message: {
+                        type: 'requestVote',
+                        term: 0,
+                    },
+                };
+
+                const effects: Array<Effect<string>> = [
+                    {
+                        type: 'sendMessageToNode',
+                        node: 2,
+                        message: {
+                            type: 'requestVoteResponse',
+                            voteGranted: false,
+                            term: 2,
+                        },
+                    },
+                ];
+                expect(reduce(event, state)).toEqual({
+                    newState: state,
+                    effects,
+                });
+            });
+
+            it('votes for a server with a newer term', () => {
+                const state = followerState({
+                    currentTerm: 1,
+                    votedFor: 1,
+                });
+                const event: Event<string> = {
+                    type: 'receivedMessageFromNode',
+                    node: 2,
+                    message: {
+                        type: 'requestVote',
+                        term: 2,
+                    },
+                };
+
+                const newState = followerState({
+                    currentTerm: 2,
+                    votedFor: 2,
+                });
+                const effects: Array<Effect<string>> = [
+                    {
+                        type: 'sendMessageToNode',
+                        node: 2,
+                        message: {
+                            type: 'requestVoteResponse',
+                            voteGranted: true,
+                            term: 2,
+                        },
+                    },
+                ];
+                expect(reduce(event, state)).toEqual({
+                    newState,
+                    effects,
+                });
             });
         });
     });

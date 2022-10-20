@@ -9,6 +9,7 @@ type MutableState<LogValueType> =
           currentTerm: number;
           log: Log<LogValueType>;
           otherClusterNodes: number[];
+          votedFor: number | undefined;
       }
     | {
           type: 'leader';
@@ -46,6 +47,7 @@ export function getInitialState<LogValueType>(
         currentTerm: 0,
         log,
         otherClusterNodes,
+        votedFor: undefined,
     };
 }
 
@@ -210,7 +212,7 @@ function reduceReceivedMessage<LogValueType>({
             });
 
         case 'requestVoteResponse':
-            return reduceRequestVoteResponse({
+            return reduceReceivedRequestVoteResponse({
                 state,
                 voteGranted: message.voteGranted,
                 term: message.term,
@@ -218,7 +220,11 @@ function reduceReceivedMessage<LogValueType>({
             });
 
         case 'requestVote':
-            throw new Error('not implemented');
+            return reduceReceivedRequestVote({
+                state,
+                term: message.term,
+                node,
+            });
 
         default:
             return unreachable(message);
@@ -308,6 +314,7 @@ function reduceReceivedAppendEntries<LogValueType>({
                 currentTerm: term,
                 log: state.log,
                 otherClusterNodes: state.otherClusterNodes,
+                votedFor: undefined,
             };
 
             const prevLogIndexFromRequest =
@@ -354,6 +361,7 @@ function reduceReceivedAppendEntries<LogValueType>({
                     log: state.log,
                     currentTerm: term,
                     otherClusterNodes: state.otherClusterNodes,
+                    votedFor: undefined,
                 };
 
                 const prevLogIndexFromRequest =
@@ -496,6 +504,7 @@ function reduceReceivedAppendEntriesResponseNotOk<LogValueType>({
                         log: state.log,
                         currentTerm: term,
                         otherClusterNodes: state.otherClusterNodes,
+                        votedFor: undefined,
                     },
                     effects: [],
                 };
@@ -548,7 +557,7 @@ function reduceReceivedAppendEntriesResponseNotOk<LogValueType>({
     }
 }
 
-function reduceRequestVoteResponse<LogValueType>({
+function reduceReceivedRequestVoteResponse<LogValueType>({
     state,
     voteGranted,
     node,
@@ -568,6 +577,7 @@ function reduceRequestVoteResponse<LogValueType>({
                         currentTerm: term,
                         otherClusterNodes: state.otherClusterNodes,
                         log: state.log,
+                        votedFor: undefined,
                     },
                     effects: [],
                 };
@@ -628,6 +638,66 @@ function reduceRequestVoteResponse<LogValueType>({
 
         case 'follower':
         case 'leader':
+            throw new Error('not implemented');
+
+        default:
+            return unreachable(state);
+    }
+}
+
+function reduceReceivedRequestVote<LogValueType>({
+    state,
+    term,
+    node,
+}: {
+    state: State<LogValueType>;
+    term: number;
+    node: number;
+}): ReducerResult<LogValueType> {
+    switch (state.type) {
+        case 'follower': {
+            if (
+                term < state.currentTerm ||
+                (term === state.currentTerm && state.votedFor !== node)
+            ) {
+                return {
+                    newState: state,
+                    effects: [
+                        {
+                            type: 'sendMessageToNode',
+                            node,
+                            message: {
+                                type: 'requestVoteResponse',
+                                voteGranted: false,
+                                term: state.currentTerm,
+                            },
+                        },
+                    ],
+                };
+            }
+
+            return {
+                newState: {
+                    ...state,
+                    currentTerm: term,
+                    votedFor: node,
+                },
+                effects: [
+                    {
+                        type: 'sendMessageToNode',
+                        node,
+                        message: {
+                            type: 'requestVoteResponse',
+                            voteGranted: true,
+                            term,
+                        },
+                    },
+                ],
+            };
+        }
+
+        case 'leader':
+        case 'candidate':
             throw new Error('not implemented');
 
         default:
