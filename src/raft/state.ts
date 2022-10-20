@@ -63,6 +63,10 @@ type MutableEvent<LogValueType> =
           type: 'receivedMessageFromNode';
           node: number;
           message: NodeMessage<LogValueType>;
+      }
+    | {
+          type: 'clientAppendToLog';
+          value: LogValueType;
       };
 
 export type Event<LogValueType> = Readonly<MutableEvent<LogValueType>>;
@@ -128,6 +132,9 @@ export function reduce<LogValueType>(
 
         case 'sendHeartbeatMessageTimeout':
             return reduceSendHeartbeatMessageTimeout(state, event.node);
+
+        case 'clientAppendToLog':
+            return reduceClientAppendToLog(state, event.value);
 
         default:
             return unreachable(event);
@@ -707,5 +714,57 @@ function reduceReceivedRequestVote<LogValueType>({
                 },
             },
         ],
+    };
+}
+
+function reduceClientAppendToLog<LogValueType>(
+    state: State<LogValueType>,
+    value: LogValueType,
+): ReducerResult<LogValueType> {
+    if (state.type !== 'leader') {
+        throw new Error('can only append to log of leader node');
+    }
+
+    const previousEntryIdentifier = previousEntryIdentifierFromNextIndex(
+        state.log,
+        state.log.getEntries().length,
+    );
+
+    const ok = state.log.appendEntries({
+        previousEntryIdentifier,
+        entries: [
+            {
+                term: state.currentTerm,
+                value,
+            },
+        ],
+    });
+
+    if (!ok) {
+        throw new Error('unexpected error: failed to append to leader log');
+    }
+
+    const effects = state.otherClusterNodes.map(
+        (node): Effect<LogValueType> => {
+            const nextIndex = nextIndexForNode(state, node);
+            const entries = state.log.getEntries().slice(nextIndex);
+            const previousEntryIdentifier =
+                previousEntryIdentifierFromNextIndex(state.log, nextIndex);
+            return {
+                type: 'sendMessageToNode',
+                node,
+                message: {
+                    type: 'appendEntries',
+                    previousEntryIdentifier,
+                    entries,
+                    term: state.currentTerm,
+                },
+            };
+        },
+    );
+
+    return {
+        newState: state,
+        effects,
     };
 }

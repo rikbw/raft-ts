@@ -994,7 +994,7 @@ describe('state', () => {
             });
 
             it('does not vote for servers of equal term', () => {
-                const state = candidateState({
+                const state = leaderState({
                     currentTerm: 3,
                 });
                 const event: Event<string> = {
@@ -1021,6 +1021,84 @@ describe('state', () => {
                     newState: state,
                     effects,
                 });
+            });
+        });
+
+        it('appends to the log when receiving clientAppendToLog', () => {
+            const state = leaderState({
+                currentTerm: 2,
+                log: new Log([
+                    {
+                        term: 1,
+                        value: 'x <- 2',
+                    },
+                ]),
+                otherClusterNodes: [0, 2],
+                followerInfo: {
+                    0: { nextIndex: 1 },
+                    2: { nextIndex: 0 },
+                },
+            });
+            const event: Event<string> = {
+                type: 'clientAppendToLog',
+                value: 'y <- 3',
+            };
+
+            const newState = leaderState({
+                ...state,
+                log: new Log([
+                    {
+                        term: 1,
+                        value: 'x <- 2',
+                    },
+                    {
+                        term: 2,
+                        value: 'y <- 3',
+                    },
+                ]),
+            });
+            const effects: Array<Effect<string>> = [
+                {
+                    type: 'sendMessageToNode',
+                    node: 0,
+                    message: {
+                        type: 'appendEntries',
+                        term: 2,
+                        entries: [
+                            {
+                                value: 'y <- 3',
+                                term: 2,
+                            },
+                        ],
+                        previousEntryIdentifier: {
+                            term: 1,
+                            index: 0,
+                        },
+                    },
+                },
+                {
+                    type: 'sendMessageToNode',
+                    node: 2,
+                    message: {
+                        type: 'appendEntries',
+                        term: 2,
+                        entries: [
+                            {
+                                value: 'x <- 2',
+                                term: 1,
+                            },
+                            {
+                                value: 'y <- 3',
+                                term: 2,
+                            },
+                        ],
+                        previousEntryIdentifier: undefined,
+                    },
+                },
+            ];
+            expect(reduce(event, state)).toEqual({
+                newState,
+                effects,
             });
         });
     });
