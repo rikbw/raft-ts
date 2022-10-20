@@ -1,22 +1,25 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
 import { OutgoingMessage, RaftNode } from './raftNode';
-import { State } from './state';
-import { Log } from './log';
 import { createLogger } from 'bunyan';
 
 class TestEnvironment {
     public readonly nodes: Array<RaftNode<string>>;
 
-    public constructor(nodeStates: State<string>[]) {
-        this.nodes = nodeStates.map((nodeState, index) => {
+    public constructor(nbNodes: number) {
+        const allNodes = Array(nbNodes)
+            .fill(null)
+            .map((_, index) => index);
+
+        this.nodes = allNodes.map((index) => {
             const logger = createLogger({
                 name: `node ${index}`,
                 level: 'debug',
             });
+            const otherNodes = allNodes.filter((id) => id != index);
             return new RaftNode<string>(
                 (message) => this.sendMessage({ message, sender: index }),
                 logger,
-                nodeState,
+                otherNodes,
             );
         });
     }
@@ -35,43 +38,30 @@ class TestEnvironment {
         };
         this.nodes[receiver]!.receiveMessage(sentMessage);
     };
-
-    public get leader(): RaftNode<string> {
-        return this.nodes[0]!;
-    }
 }
 
 describe('RaftNode', () => {
     it('syncs the log with follower nodes', () => {
-        const logEntries = [
-            {
-                term: 0,
-                value: 'x <- 1',
-            },
-            {
-                term: 0,
-                value: 'y <- 2',
-            },
-        ];
-        const leaderLog = new Log(logEntries);
-        const leaderState: State<string> = {
-            type: 'leader',
-            currentTerm: 1,
-            log: leaderLog,
-            followerInfo: {},
-        };
-        const followerState: State<string> = {
-            type: 'follower',
-            currentTerm: 0,
-            log: new Log([]),
-        };
-        const environment = new TestEnvironment([leaderState, followerState]);
+        const environment = new TestEnvironment(3);
 
-        environment.leader.sendHeartbeatTimeoutForNode(1);
+        environment.nodes[0]!.leaderElectionTimeout();
 
-        const [leader, follower] = environment.nodes;
+        expect(environment.nodes[0]!.__stateForTests.type).toEqual('leader');
 
-        expect(leader!.__stateForTests.log.getEntries()).toEqual(logEntries);
-        expect(follower!.__stateForTests.log.getEntries()).toEqual(logEntries);
+        environment.nodes[0]!.appendToLog('x <- 1');
+        environment.nodes[0]!.appendToLog('y <- 2');
+
+        environment.nodes.forEach((node) => {
+            expect(node.__stateForTests.log.getEntries()).toEqual([
+                {
+                    term: 1,
+                    value: 'x <- 1',
+                },
+                {
+                    term: 1,
+                    value: 'y <- 2',
+                },
+            ]);
+        });
     });
 });

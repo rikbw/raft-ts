@@ -30,22 +30,38 @@ export class RaftNode<LogValueType> {
             message: OutgoingMessage<LogValueType>,
         ) => void,
         private readonly logger: Logger,
-        // TODO when all messages have proper handlers, this won't be necessary anymore.
-        // For example, when voting works, we can create a leader by sending it (fake) messages in tests.
-        // Now we have to give it an initial state that says it's a leader.
-        initialStateForTesting?: State<LogValueType>,
+        otherClusterNodes: number[],
     ) {
-        this.state =
-            initialStateForTesting ??
+        this.state = getInitialState(
             // TODO this should read the log from disk. Should probably be passed down by the caller of this constructor.
-            getInitialState(new Log<LogValueType>([]));
+            new Log<LogValueType>([]),
+            otherClusterNodes,
+        );
+    }
+
+    public appendToLog(value: LogValueType) {
+        if (this.state.type !== 'leader') {
+            return false;
+        }
+
+        this.dispatch({
+            type: 'clientAppendToLog',
+            value,
+        });
+        return true;
+    }
+
+    public leaderElectionTimeout() {
+        this.dispatch({
+            type: 'electionTimeout',
+        });
     }
 
     public receiveMessage(message: IncomingMessage<LogValueType>) {
         const { sender, ...rest } = message;
-        this.logger.debug('received message', {
-            message,
-        });
+        // this.logger.debug('received message', {
+        //     message,
+        // });
         this.dispatch({
             type: 'receivedMessageFromNode',
             message: rest,
@@ -74,9 +90,9 @@ export class RaftNode<LogValueType> {
             this.logger.info(`RaftNode became ${newState.type}`);
         }
 
-        this.handleEffects(effects);
-
         this.state = newState;
+
+        this.handleEffects(effects);
     }
 
     private handleEffects(effects: Effect<LogValueType>[]) {
@@ -95,12 +111,6 @@ export class RaftNode<LogValueType> {
                 }
 
                 case 'resetElectionTimeout':
-                    return;
-
-                case 'resetSendHeartbeatMessageTimeout':
-                    return;
-
-                case 'broadcastRequestVote':
                     return;
 
                 default:
