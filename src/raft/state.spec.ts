@@ -85,7 +85,8 @@ describe('state', () => {
                 });
                 const effects: Effect<string>[] = [
                     {
-                        type: 'sendAppendEntriesResponseOk',
+                        type: 'sendMessageToNode',
+                        message: { type: 'appendEntriesResponseOk' },
                         node,
                     },
                 ];
@@ -244,11 +245,14 @@ describe('state', () => {
                     node,
                 },
                 {
-                    type: 'sendAppendEntries',
-                    term: 2,
+                    type: 'sendMessageToNode',
                     node,
-                    previousEntryIdentifier: undefined,
-                    entries: [],
+                    message: {
+                        type: 'appendEntries',
+                        term: 2,
+                        previousEntryIdentifier: undefined,
+                        entries: [],
+                    },
                 },
             ];
             expect(reduce(event, state)).toEqual({
@@ -294,19 +298,22 @@ describe('state', () => {
                         node,
                     },
                     {
-                        type: 'sendAppendEntries',
-                        term: 2,
+                        type: 'sendMessageToNode',
                         node,
-                        previousEntryIdentifier: {
-                            index: 0,
-                            term: 1,
-                        },
-                        entries: [
-                            {
-                                value: 'y <- 2',
-                                term: 2,
+                        message: {
+                            type: 'appendEntries',
+                            term: 2,
+                            previousEntryIdentifier: {
+                                index: 0,
+                                term: 1,
                             },
-                        ],
+                            entries: [
+                                {
+                                    value: 'y <- 2',
+                                    term: 2,
+                                },
+                            ],
+                        },
                     },
                 ];
                 expect(reduce(event, state)).toEqual({
@@ -351,20 +358,23 @@ describe('state', () => {
                         node,
                     },
                     {
-                        type: 'sendAppendEntries',
-                        term: 2,
+                        type: 'sendMessageToNode',
                         node,
-                        previousEntryIdentifier: undefined,
-                        entries: [
-                            {
-                                value: 'x <- 1',
-                                term: 1,
-                            },
-                            {
-                                value: 'y <- 2',
-                                term: 2,
-                            },
-                        ],
+                        message: {
+                            type: 'appendEntries',
+                            term: 2,
+                            previousEntryIdentifier: undefined,
+                            entries: [
+                                {
+                                    value: 'x <- 1',
+                                    term: 1,
+                                },
+                                {
+                                    value: 'y <- 2',
+                                    term: 2,
+                                },
+                            ],
+                        },
                     },
                 ];
                 expect(reduce(event, state)).toEqual({

@@ -71,6 +71,22 @@ type MutableEvent<LogValueType> =
 
 export type Event<LogValueType> = Readonly<MutableEvent<LogValueType>>;
 
+export type NodeMessage<LogValueType> =
+    | {
+          type: 'appendEntries';
+          previousEntryIdentifier: EntryIdentifier | undefined;
+          term: number;
+          entries: Array<Entry<LogValueType>>;
+      }
+    | {
+          type: 'appendEntriesResponseOk';
+      }
+    | {
+          type: 'appendEntriesResponseNotOk';
+          prevLogIndex: number;
+          term: number;
+      };
+
 type MutableEffect<LogValueType> =
     | {
           type: 'resetElectionTimeout';
@@ -80,24 +96,12 @@ type MutableEffect<LogValueType> =
           node: number;
       }
     | {
-          type: 'sendAppendEntries';
-          previousEntryIdentifier: EntryIdentifier | undefined;
-          term: number;
-          node: number;
-          entries: Array<Entry<LogValueType>>;
-      }
-    | {
           type: 'broadcastRequestVote';
           term: number;
       }
     | {
-          type: 'sendAppendEntriesResponseOk';
-          node: number;
-      }
-    | {
-          type: 'sendAppendEntriesResponseNotOk';
-          prevLogIndex: number;
-          term: number;
+          type: 'sendMessageToNode';
+          message: NodeMessage<LogValueType>;
           node: number;
       };
 
@@ -198,11 +202,14 @@ function reduceReceivedAppendEntries<LogValueType>({
                     newState: state,
                     effects: [
                         {
-                            type: 'sendAppendEntriesResponseNotOk',
+                            type: 'sendMessageToNode',
                             node,
-                            term: state.currentTerm,
-                            // Doesn't matter, the receiver will step down as a leader.
-                            prevLogIndex: 0,
+                            message: {
+                                type: 'appendEntriesResponseNotOk',
+                                term: state.currentTerm,
+                                // Doesn't matter, the receiver will step down as a leader.
+                                prevLogIndex: 0,
+                            },
                         },
                     ],
                 };
@@ -224,7 +231,10 @@ function reduceReceivedAppendEntries<LogValueType>({
                     newState,
                     effects: [
                         {
-                            type: 'sendAppendEntriesResponseOk',
+                            type: 'sendMessageToNode',
+                            message: {
+                                type: 'appendEntriesResponseOk',
+                            },
                             node,
                         },
                     ],
@@ -296,16 +306,19 @@ function reduceSendHeartbeatMessageTimeout<LogValueType>(
                         node,
                     },
                     {
-                        type: 'sendAppendEntries',
-                        term: state.currentTerm,
+                        type: 'sendMessageToNode',
+                        message: {
+                            type: 'appendEntries',
+                            term: state.currentTerm,
+                            // TODO test this value
+                            previousEntryIdentifier:
+                                previousEntryIdentifierFromNextIndex(
+                                    state,
+                                    nextIndex,
+                                ),
+                            entries,
+                        },
                         node,
-                        // TODO test this value
-                        previousEntryIdentifier:
-                            previousEntryIdentifierFromNextIndex(
-                                state,
-                                nextIndex,
-                            ),
-                        entries,
                     },
                 ],
             };
@@ -369,15 +382,18 @@ function receivedAppendEntriesResultNotOk<LogValueType>({
                         node,
                     },
                     {
-                        type: 'sendAppendEntries',
-                        term: state.currentTerm,
+                        type: 'sendMessageToNode',
                         node,
-                        previousEntryIdentifier:
-                            previousEntryIdentifierFromNextIndex(
-                                newState,
-                                nextIndex,
-                            ),
-                        entries,
+                        message: {
+                            type: 'appendEntries',
+                            term: state.currentTerm,
+                            previousEntryIdentifier:
+                                previousEntryIdentifierFromNextIndex(
+                                    newState,
+                                    nextIndex,
+                                ),
+                            entries,
+                        },
                     },
                 ],
             };
