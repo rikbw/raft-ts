@@ -168,7 +168,7 @@ function reduceReceivedMessage<LogValueType>({
 }): ReducerResult<LogValueType> {
     switch (message.type) {
         case 'appendEntriesResponseOk':
-            throw new Error('not implemented');
+            return reduceReceivedAppendEntriesResponseOk(state);
 
         case 'appendEntries':
             return reduceReceivedAppendEntries({
@@ -180,13 +180,22 @@ function reduceReceivedMessage<LogValueType>({
             });
 
         case 'appendEntriesResponseNotOk':
-            return reduceReceivedAppendEntriesResultNotOk({
+            return reduceReceivedAppendEntriesResponseNotOk({
                 node,
                 prevLogIndex: message.prevLogIndex,
                 state,
                 term: message.term,
             });
     }
+}
+
+function reduceReceivedAppendEntriesResponseOk<LogValueType>(
+    state: State<LogValueType>,
+): ReducerResult<LogValueType> {
+    return {
+        newState: state,
+        effects: [],
+    };
 }
 
 function reduceReceivedAppendEntries<LogValueType>({
@@ -342,7 +351,7 @@ function reduceSendHeartbeatMessageTimeout<LogValueType>(
     }
 }
 
-function reduceReceivedAppendEntriesResultNotOk<LogValueType>({
+function reduceReceivedAppendEntriesResponseNotOk<LogValueType>({
     state,
     prevLogIndex,
     term,

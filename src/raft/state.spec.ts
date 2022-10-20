@@ -396,6 +396,22 @@ describe('state', () => {
             });
         });
 
+        it('does nothing when it receives that appendEntries is ok', () => {
+            const state = leaderState();
+            const event: Event<string> = {
+                type: 'receivedMessageFromNode',
+                node: 2,
+                message: {
+                    type: 'appendEntriesResponseOk',
+                },
+            };
+
+            expect(reduce(event, state)).toEqual({
+                newState: state,
+                effects: [],
+            });
+        });
+
         it.todo(
             'transitions to follower if it receives an appendEntries of higher term',
         );
