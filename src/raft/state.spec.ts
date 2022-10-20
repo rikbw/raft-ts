@@ -190,7 +190,7 @@ describe('state', () => {
                         node,
                         message: {
                             type: 'appendEntriesResponseNotOk',
-                            prevLogIndex: 0,
+                            prevLogIndexFromRequest: 0,
                             term: 2,
                         },
                     },
@@ -240,7 +240,7 @@ describe('state', () => {
                     node: 2,
                     message: {
                         type: 'appendEntriesResponseNotOk',
-                        prevLogIndex: expect.any(Number),
+                        prevLogIndexFromRequest: expect.any(Number),
                         term: 3,
                     },
                 },
@@ -296,15 +296,45 @@ describe('state', () => {
             );
         });
 
-        it.todo(
-            'transitions to follower if it receives an appendEntries of equal or higher term',
-        );
+        it('transitions to follower if it receives an appendEntries of equal or higher term', () => {
+            const state = candidateState({
+                currentTerm: 2,
+            });
+            const event: Event<string> = {
+                type: 'receivedMessageFromNode',
+                node: 2,
+                message: {
+                    type: 'appendEntries',
+                    previousEntryIdentifier: undefined,
+                    term: 2,
+                    entries: [],
+                },
+            };
+
+            const newState = followerState({
+                currentTerm: 2,
+            });
+            const effects: Array<Effect<string>> = [
+                {
+                    type: 'sendMessageToNode',
+                    node: 2,
+                    message: {
+                        type: 'appendEntriesResponseOk',
+                    },
+                },
+                {
+                    type: 'resetElectionTimeout',
+                },
+            ];
+            expect(reduce(event, state)).toEqual({
+                newState,
+                effects,
+            });
+        });
 
         it.todo(
             '(? todo verify this) sends a requestVote message if it receives an appendEntries of lower term',
         );
-
-        it.todo('resets its election timeout if it receives appendEntries');
     });
 
     describe('leader', () => {
@@ -376,7 +406,7 @@ describe('state', () => {
                     node,
                     message: {
                         type: 'appendEntriesResponseNotOk',
-                        prevLogIndex: 1,
+                        prevLogIndexFromRequest: 1,
                         term: 2,
                     },
                 };
@@ -439,7 +469,7 @@ describe('state', () => {
                     node,
                     message: {
                         type: 'appendEntriesResponseNotOk',
-                        prevLogIndex: 0,
+                        prevLogIndexFromRequest: 0,
                         term: 2,
                     },
                 };

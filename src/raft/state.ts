@@ -71,7 +71,7 @@ export type NodeMessage<LogValueType> =
       }
     | {
           type: 'appendEntriesResponseNotOk';
-          prevLogIndex: number;
+          prevLogIndexFromRequest: number;
           term: number;
       };
 
@@ -182,7 +182,7 @@ function reduceReceivedMessage<LogValueType>({
         case 'appendEntriesResponseNotOk':
             return reduceReceivedAppendEntriesResponseNotOk({
                 node,
-                prevLogIndex: message.prevLogIndex,
+                prevLogIndexFromRequest: message.prevLogIndexFromRequest,
                 state,
                 term: message.term,
             });
@@ -228,7 +228,7 @@ function reduceReceivedAppendEntries<LogValueType>({
                                 type: 'appendEntriesResponseNotOk',
                                 term: state.currentTerm,
                                 // Doesn't matter, the receiver will step down as a leader.
-                                prevLogIndex: 0,
+                                prevLogIndexFromRequest: 0,
                             },
                         },
                         resetElectionTimeoutEffect,
@@ -257,7 +257,7 @@ function reduceReceivedAppendEntries<LogValueType>({
                             node,
                             message: {
                                 type: 'appendEntriesResponseNotOk',
-                                prevLogIndex:
+                                prevLogIndexFromRequest:
                                     previousEntryIdentifier?.index ?? -1,
                                 term,
                             },
@@ -283,6 +283,46 @@ function reduceReceivedAppendEntries<LogValueType>({
         }
 
         case 'candidate':
+            if (term >= state.currentTerm) {
+                const newState: State<LogValueType> = {
+                    type: 'follower',
+                    log: state.log,
+                    currentTerm: term,
+                };
+
+                return {
+                    newState,
+                    effects: [
+                        {
+                            type: 'sendMessageToNode',
+                            node,
+                            message: {
+                                type: 'appendEntriesResponseOk',
+                            },
+                        },
+                        {
+                            type: 'resetElectionTimeout',
+                        },
+                    ],
+                };
+            }
+
+            return {
+                newState: state,
+                effects: [
+                    {
+                        type: 'sendMessageToNode',
+                        node,
+                        message: {
+                            type: 'appendEntriesResponseNotOk',
+                            term: state.currentTerm,
+                            // Does not matter, the sender will step down as a leader
+                            prevLogIndexFromRequest: 0,
+                        },
+                    },
+                ],
+            };
+
         case 'leader':
             throw new Error('not implemented');
 
@@ -372,12 +412,12 @@ function reduceSendHeartbeatMessageTimeout<LogValueType>(
 
 function reduceReceivedAppendEntriesResponseNotOk<LogValueType>({
     state,
-    prevLogIndex,
+    prevLogIndexFromRequest,
     term,
     node,
 }: {
     state: State<LogValueType>;
-    prevLogIndex: number;
+    prevLogIndexFromRequest: number;
     term: number;
     node: number;
 }): ReducerResult<LogValueType> {
@@ -400,7 +440,7 @@ function reduceReceivedAppendEntriesResponseNotOk<LogValueType>({
                     ...state.followerInfo,
                     [node]: {
                         nextIndex: Math.max(
-                            prevLogIndex,
+                            prevLogIndexFromRequest,
                             (state.followerInfo[node]?.nextIndex ?? 0) - 1,
                         ),
                     },
