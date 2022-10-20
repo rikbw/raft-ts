@@ -89,7 +89,10 @@ describe('state', () => {
                 const effects: Effect<string>[] = [
                     {
                         type: 'sendMessageToNode',
-                        message: { type: 'appendEntriesResponseOk' },
+                        message: {
+                            type: 'appendEntriesResponseOk',
+                            prevLogIndexFromRequest: -1,
+                        },
                         node,
                     },
                     {
@@ -147,6 +150,7 @@ describe('state', () => {
                         node,
                         message: {
                             type: 'appendEntriesResponseOk',
+                            prevLogIndexFromRequest: -1,
                         },
                     },
                     {
@@ -320,6 +324,7 @@ describe('state', () => {
                     node: 2,
                     message: {
                         type: 'appendEntriesResponseOk',
+                        prevLogIndexFromRequest: expect.any(Number),
                     },
                 },
                 {
@@ -514,18 +519,32 @@ describe('state', () => {
             });
         });
 
-        it('does nothing when it receives that appendEntries is ok', () => {
-            const state = leaderState();
+        it('updates follower state when it receives that appendEntries is ok', () => {
+            const state = leaderState({
+                followerInfo: {
+                    2: {
+                        nextIndex: 3,
+                    },
+                },
+            });
             const event: Event<string> = {
                 type: 'receivedMessageFromNode',
                 node: 2,
                 message: {
                     type: 'appendEntriesResponseOk',
+                    prevLogIndexFromRequest: 2,
                 },
             };
 
+            const newState = leaderState({
+                followerInfo: {
+                    2: {
+                        nextIndex: 4,
+                    },
+                },
+            });
             expect(reduce(event, state)).toEqual({
-                newState: state,
+                newState: newState,
                 effects: [],
             });
         });

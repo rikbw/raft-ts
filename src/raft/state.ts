@@ -68,6 +68,7 @@ export type NodeMessage<LogValueType> =
       }
     | {
           type: 'appendEntriesResponseOk';
+          prevLogIndexFromRequest: number;
       }
     | {
           type: 'appendEntriesResponseNotOk';
@@ -168,7 +169,11 @@ function reduceReceivedMessage<LogValueType>({
 }): ReducerResult<LogValueType> {
     switch (message.type) {
         case 'appendEntriesResponseOk':
-            return reduceReceivedAppendEntriesResponseOk(state);
+            return reduceReceivedAppendEntriesResponseOk({
+                state,
+                prevLogIndexFromRequest: message.prevLogIndexFromRequest,
+                node,
+            });
 
         case 'appendEntries':
             return reduceReceivedAppendEntries({
@@ -189,13 +194,38 @@ function reduceReceivedMessage<LogValueType>({
     }
 }
 
-function reduceReceivedAppendEntriesResponseOk<LogValueType>(
-    state: State<LogValueType>,
-): ReducerResult<LogValueType> {
-    return {
-        newState: state,
-        effects: [],
-    };
+function reduceReceivedAppendEntriesResponseOk<LogValueType>({
+    state,
+    node,
+    prevLogIndexFromRequest,
+}: {
+    state: State<LogValueType>;
+    node: number;
+    prevLogIndexFromRequest: number;
+}): ReducerResult<LogValueType> {
+    switch (state.type) {
+        case 'leader': {
+            const newState: State<LogValueType> = {
+                ...state,
+                followerInfo: {
+                    ...state.followerInfo,
+                    [node]: {
+                        nextIndex: prevLogIndexFromRequest + 2,
+                    },
+                },
+            };
+            return {
+                newState,
+                effects: [],
+            };
+        }
+
+        case 'follower':
+        case 'candidate':
+            throw new Error(
+                'unexpected error: did not expect to receive append entries result in this state',
+            );
+    }
 }
 
 function reduceReceivedAppendEntries<LogValueType>({
@@ -248,6 +278,9 @@ function reduceReceivedAppendEntries<LogValueType>({
                 log: state.log,
             };
 
+            const prevLogIndexFromRequest =
+                previousEntryIdentifier?.index ?? -1;
+
             if (!ok) {
                 return {
                     newState,
@@ -257,8 +290,7 @@ function reduceReceivedAppendEntries<LogValueType>({
                             node,
                             message: {
                                 type: 'appendEntriesResponseNotOk',
-                                prevLogIndexFromRequest:
-                                    previousEntryIdentifier?.index ?? -1,
+                                prevLogIndexFromRequest,
                                 term,
                             },
                         },
@@ -274,6 +306,7 @@ function reduceReceivedAppendEntries<LogValueType>({
                         type: 'sendMessageToNode',
                         message: {
                             type: 'appendEntriesResponseOk',
+                            prevLogIndexFromRequest,
                         },
                         node,
                     },
@@ -290,6 +323,9 @@ function reduceReceivedAppendEntries<LogValueType>({
                     currentTerm: term,
                 };
 
+                const prevLogIndexFromRequest =
+                    previousEntryIdentifier?.index ?? -1;
+
                 return {
                     newState,
                     effects: [
@@ -298,6 +334,7 @@ function reduceReceivedAppendEntries<LogValueType>({
                             node,
                             message: {
                                 type: 'appendEntriesResponseOk',
+                                prevLogIndexFromRequest,
                             },
                         },
                         {
