@@ -71,8 +71,7 @@ export class RaftNode<LogValueType> {
         const { newState, effects } = reduce(event, this.state);
 
         if (newState.type !== this.state.type) {
-            // TODO replace by a real logger (which logs metadata)
-            console.log(`RaftNode became ${newState.type}`);
+            this.logger.info(`RaftNode became ${newState.type}`);
         }
 
         this.handleEffects(effects);
