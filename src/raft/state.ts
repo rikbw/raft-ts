@@ -8,17 +8,21 @@ type MutableState<LogValueType> =
           type: 'follower';
           currentTerm: number;
           log: Log<LogValueType>;
+          otherClusterNodes: number[];
       }
     | {
           type: 'leader';
           currentTerm: number;
           log: Log<LogValueType>;
           followerInfo: FollowerInfo;
+          otherClusterNodes: number[];
       }
     | {
           type: 'candidate';
           currentTerm: number;
+          votes: Set<number>;
           log: Log<LogValueType>;
+          otherClusterNodes: number[];
       };
 
 export type State<LogValueType> = Readonly<MutableState<LogValueType>>;
@@ -35,11 +39,13 @@ export type CandidateState<LogValueType> = State<LogValueType> & {
 
 export function getInitialState<LogValueType>(
     log: Log<LogValueType>,
+    otherClusterNodes: number[],
 ): State<LogValueType> {
     return {
         type: 'follower',
         currentTerm: 0,
         log,
+        otherClusterNodes,
     };
 }
 
@@ -74,19 +80,21 @@ export type NodeMessage<LogValueType> =
           type: 'appendEntriesResponseNotOk';
           prevLogIndexFromRequest: number;
           term: number;
+      }
+    | {
+          // TODO implement leader completeness
+          type: 'requestVote';
+          term: number;
+      }
+    | {
+          type: 'requestVoteResponse';
+          voteGranted: boolean;
+          term: number;
       };
 
 type MutableEffect<LogValueType> =
     | {
           type: 'resetElectionTimeout';
-      }
-    | {
-          type: 'resetSendHeartbeatMessageTimeout';
-          node: number;
-      }
-    | {
-          type: 'broadcastRequestVote';
-          term: number;
       }
     | {
           type: 'sendMessageToNode';
@@ -135,17 +143,26 @@ function reduceElectionTimeout<LogValueType>(
         case 'follower':
         case 'candidate': {
             const newTerm = state.currentTerm + 1;
+            const voteRequests = state.otherClusterNodes.map(
+                (node): Effect<LogValueType> => ({
+                    type: 'sendMessageToNode',
+                    node,
+                    message: {
+                        type: 'requestVote',
+                        term: newTerm,
+                    },
+                }),
+            );
             return {
                 newState: {
                     type: 'candidate',
                     currentTerm: newTerm,
                     log: state.log,
+                    votes: new Set(),
+                    otherClusterNodes: state.otherClusterNodes,
                 },
                 effects: [
-                    {
-                        type: 'broadcastRequestVote',
-                        term: newTerm,
-                    },
+                    ...voteRequests,
                     {
                         type: 'resetElectionTimeout',
                     },
@@ -191,6 +208,20 @@ function reduceReceivedMessage<LogValueType>({
                 state,
                 term: message.term,
             });
+
+        case 'requestVoteResponse':
+            return reduceRequestVoteResponse({
+                state,
+                voteGranted: message.voteGranted,
+                term: message.term,
+                node,
+            });
+
+        case 'requestVote':
+            throw new Error('not implemented');
+
+        default:
+            return unreachable(message);
     }
 }
 
@@ -276,6 +307,7 @@ function reduceReceivedAppendEntries<LogValueType>({
                 type: 'follower',
                 currentTerm: term,
                 log: state.log,
+                otherClusterNodes: state.otherClusterNodes,
             };
 
             const prevLogIndexFromRequest =
@@ -321,6 +353,7 @@ function reduceReceivedAppendEntries<LogValueType>({
                     type: 'follower',
                     log: state.log,
                     currentTerm: term,
+                    otherClusterNodes: state.otherClusterNodes,
                 };
 
                 const prevLogIndexFromRequest =
@@ -384,7 +417,7 @@ function nextIndexForNode<LogValueType>(
 }
 
 function previousEntryIdentifierFromNextIndex<ValueType>(
-    state: LeaderState<ValueType>,
+    log: Log<ValueType>,
     nextIndex: number,
 ): EntryIdentifier | undefined {
     const previousLogIndex = nextIndex - 1;
@@ -394,7 +427,7 @@ function previousEntryIdentifierFromNextIndex<ValueType>(
     }
 
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    const previousLogTerm = state.log.getEntries()[previousLogIndex]!.term;
+    const previousLogTerm = log.getEntries()[previousLogIndex]!.term;
 
     return {
         index: previousLogIndex,
@@ -414,10 +447,6 @@ function reduceSendHeartbeatMessageTimeout<LogValueType>(
                 newState: state,
                 effects: [
                     {
-                        type: 'resetSendHeartbeatMessageTimeout',
-                        node,
-                    },
-                    {
                         type: 'sendMessageToNode',
                         message: {
                             type: 'appendEntries',
@@ -425,7 +454,7 @@ function reduceSendHeartbeatMessageTimeout<LogValueType>(
                             // TODO test this value
                             previousEntryIdentifier:
                                 previousEntryIdentifierFromNextIndex(
-                                    state,
+                                    state.log,
                                     nextIndex,
                                 ),
                             entries,
@@ -466,6 +495,7 @@ function reduceReceivedAppendEntriesResponseNotOk<LogValueType>({
                         type: 'follower',
                         log: state.log,
                         currentTerm: term,
+                        otherClusterNodes: state.otherClusterNodes,
                     },
                     effects: [],
                 };
@@ -490,10 +520,6 @@ function reduceReceivedAppendEntriesResponseNotOk<LogValueType>({
                 newState,
                 effects: [
                     {
-                        type: 'resetSendHeartbeatMessageTimeout',
-                        node,
-                    },
-                    {
                         type: 'sendMessageToNode',
                         node,
                         message: {
@@ -501,7 +527,7 @@ function reduceReceivedAppendEntriesResponseNotOk<LogValueType>({
                             term: state.currentTerm,
                             previousEntryIdentifier:
                                 previousEntryIdentifierFromNextIndex(
-                                    newState,
+                                    newState.log,
                                     nextIndex,
                                 ),
                             entries,
@@ -516,6 +542,93 @@ function reduceReceivedAppendEntriesResponseNotOk<LogValueType>({
             throw new Error(
                 'unreachable: did not expect to receive a response to append entries in this state',
             );
+
+        default:
+            return unreachable(state);
+    }
+}
+
+function reduceRequestVoteResponse<LogValueType>({
+    state,
+    voteGranted,
+    node,
+    term,
+}: {
+    state: State<LogValueType>;
+    voteGranted: boolean;
+    node: number;
+    term: number;
+}): ReducerResult<LogValueType> {
+    switch (state.type) {
+        case 'candidate': {
+            if (term > state.currentTerm) {
+                return {
+                    newState: {
+                        type: 'follower',
+                        currentTerm: term,
+                        otherClusterNodes: state.otherClusterNodes,
+                        log: state.log,
+                    },
+                    effects: [],
+                };
+            }
+
+            const votes = voteGranted ? state.votes.add(node) : state.votes;
+
+            if (votes.size > state.otherClusterNodes.length / 2) {
+                const nextIndex = state.log.getEntries().length;
+
+                const appendEntriesMessage: NodeMessage<LogValueType> = {
+                    type: 'appendEntries',
+                    entries: [],
+                    previousEntryIdentifier:
+                        previousEntryIdentifierFromNextIndex(
+                            state.log,
+                            nextIndex,
+                        ),
+                    term: state.currentTerm,
+                };
+
+                const effects = state.otherClusterNodes.map(
+                    (node): Effect<LogValueType> => ({
+                        type: 'sendMessageToNode',
+                        node,
+                        message: appendEntriesMessage,
+                    }),
+                );
+
+                const followerInfo = state.otherClusterNodes.reduce(
+                    (prev: FollowerInfo, node) => ({
+                        ...prev,
+                        [node]: { nextIndex: state.log.getEntries().length },
+                    }),
+                    {},
+                );
+
+                return {
+                    newState: {
+                        type: 'leader',
+                        log: state.log,
+                        otherClusterNodes: state.otherClusterNodes,
+                        currentTerm: state.currentTerm,
+                        followerInfo,
+                    },
+                    effects,
+                };
+            }
+
+            return {
+                newState: {
+                    ...state,
+                    votes,
+                },
+                effects: [],
+            };
+        }
+
+        case 'follower':
+        case 'leader':
+            throw new Error('not implemented');
 
         default:
             return unreachable(state);

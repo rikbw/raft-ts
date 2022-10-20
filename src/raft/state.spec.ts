@@ -5,36 +5,45 @@ import {
     FollowerState,
     CandidateState,
     LeaderState,
+    NodeMessage,
 } from './state';
 import { Log } from './log';
 
 const followerState = ({
     currentTerm = 0,
     log = new Log([]),
+    otherClusterNodes = [],
 }: Partial<FollowerState<string>> = {}): FollowerState<string> => ({
     type: 'follower',
     currentTerm,
     log,
+    otherClusterNodes,
 });
 
 const candidateState = ({
     currentTerm = 0,
     log = new Log([]),
+    otherClusterNodes = [],
+    votes = new Set(),
 }: Partial<CandidateState<string>> = {}): CandidateState<string> => ({
     type: 'candidate',
     currentTerm,
     log,
+    otherClusterNodes,
+    votes,
 });
 
 const leaderState = ({
     currentTerm = 0,
     log = new Log([]),
     followerInfo = {},
+    otherClusterNodes = [],
 }: Partial<LeaderState<string>> = {}): LeaderState<string> => ({
     type: 'leader',
     currentTerm,
     log,
     followerInfo,
+    otherClusterNodes,
 });
 
 describe('state', () => {
@@ -42,6 +51,7 @@ describe('state', () => {
         it('transitions to candidate and requests votes when election timeout fires', () => {
             const state = followerState({
                 currentTerm: 0,
+                otherClusterNodes: [0, 2],
             });
             const event: Event<string> = {
                 type: 'electionTimeout',
@@ -50,11 +60,24 @@ describe('state', () => {
             const newState = candidateState({
                 currentTerm: 1,
                 log: state.log,
+                otherClusterNodes: state.otherClusterNodes,
             });
             const effects: Effect<string>[] = [
                 {
-                    type: 'broadcastRequestVote',
-                    term: 1,
+                    type: 'sendMessageToNode',
+                    node: 0,
+                    message: {
+                        type: 'requestVote',
+                        term: 1,
+                    },
+                },
+                {
+                    type: 'sendMessageToNode',
+                    node: 2,
+                    message: {
+                        type: 'requestVote',
+                        term: 1,
+                    },
                 },
                 {
                     type: 'resetElectionTimeout',
@@ -263,6 +286,7 @@ describe('state', () => {
         it('starts a new voting term when election timeout fires', () => {
             const state = candidateState({
                 currentTerm: 2,
+                otherClusterNodes: [1, 2],
             });
             const event: Event<string> = {
                 type: 'electionTimeout',
@@ -270,11 +294,24 @@ describe('state', () => {
 
             const newState = candidateState({
                 currentTerm: 3,
+                otherClusterNodes: state.otherClusterNodes,
             });
             const effects: Effect<string>[] = [
                 {
-                    type: 'broadcastRequestVote',
-                    term: 3,
+                    type: 'sendMessageToNode',
+                    node: 1,
+                    message: {
+                        type: 'requestVote',
+                        term: 3,
+                    },
+                },
+                {
+                    type: 'sendMessageToNode',
+                    node: 2,
+                    message: {
+                        type: 'requestVote',
+                        term: 3,
+                    },
                 },
                 {
                     type: 'resetElectionTimeout',
@@ -337,9 +374,142 @@ describe('state', () => {
             });
         });
 
-        it.todo(
-            '(? todo verify this) sends a requestVote message if it receives an appendEntries of lower term',
-        );
+        it('sends a not ok response if it receives an appendEntries of lower term', () => {
+            const state = candidateState({
+                currentTerm: 1,
+            });
+            const event: Event<string> = {
+                type: 'receivedMessageFromNode',
+                node: 1,
+                message: {
+                    type: 'appendEntries',
+                    term: 0,
+                    previousEntryIdentifier: undefined,
+                    entries: [],
+                },
+            };
+
+            const effects: Array<Effect<string>> = [
+                {
+                    type: 'sendMessageToNode',
+                    node: 1,
+                    message: {
+                        type: 'appendEntriesResponseNotOk',
+                        term: 1,
+                        prevLogIndexFromRequest: expect.any(Number),
+                    },
+                },
+            ];
+            expect(reduce(event, state)).toEqual({
+                newState: state,
+                effects,
+            });
+        });
+
+        describe('when it receives request vote response', () => {
+            it('becomes leader when it receives a majority of the votes', () => {
+                const state = candidateState({
+                    currentTerm: 1,
+                    otherClusterNodes: [1, 2],
+                    votes: new Set([1]),
+                    log: new Log([{ term: 0, value: 'x <- 2' }]),
+                });
+                const event: Event<string> = {
+                    type: 'receivedMessageFromNode',
+                    node: 2,
+                    message: {
+                        type: 'requestVoteResponse',
+                        voteGranted: true,
+                        term: 1,
+                    },
+                };
+
+                const newState = leaderState({
+                    currentTerm: 1,
+                    otherClusterNodes: state.otherClusterNodes,
+                    followerInfo: {
+                        1: { nextIndex: 1 },
+                        2: { nextIndex: 1 },
+                    },
+                    log: state.log,
+                });
+                const message: NodeMessage<string> = {
+                    type: 'appendEntries',
+                    entries: [],
+                    term: 1,
+                    previousEntryIdentifier: {
+                        term: 0,
+                        index: 0,
+                    },
+                };
+                const effects: Array<Effect<string>> = [
+                    {
+                        type: 'sendMessageToNode',
+                        node: 1,
+                        message,
+                    },
+                    {
+                        type: 'sendMessageToNode',
+                        node: 2,
+                        message,
+                    },
+                ];
+                expect(reduce(event, state)).toEqual({
+                    newState,
+                    effects,
+                });
+            });
+
+            it('does not count the same vote twice', () => {
+                const state = candidateState({
+                    currentTerm: 1,
+                    otherClusterNodes: [1, 2],
+                    votes: new Set([1]),
+                });
+
+                const event: Event<string> = {
+                    type: 'receivedMessageFromNode',
+                    node: 1,
+                    message: {
+                        type: 'requestVoteResponse',
+                        voteGranted: true,
+                        term: 1,
+                    },
+                };
+
+                const newState = candidateState({
+                    currentTerm: 1,
+                    otherClusterNodes: state.otherClusterNodes,
+                    votes: state.votes,
+                });
+                expect(reduce(event, state)).toEqual({
+                    newState,
+                    effects: [],
+                });
+            });
+
+            it('does not count the vote if the response is not granted', () => {
+                const state = candidateState({
+                    currentTerm: 3,
+                    otherClusterNodes: [0, 1],
+                    votes: new Set(),
+                });
+                const event: Event<string> = {
+                    type: 'receivedMessageFromNode',
+                    node: 0,
+                    message: {
+                        type: 'requestVoteResponse',
+                        voteGranted: false,
+                        term: 3,
+                    },
+                };
+
+                expect(reduce(event, state)).toEqual({
+                    newState: state,
+                    effects: [],
+                });
+            });
+        });
     });
 
     describe('leader', () => {
@@ -369,10 +539,6 @@ describe('state', () => {
             };
 
             const effects: Effect<string>[] = [
-                {
-                    type: 'resetSendHeartbeatMessageTimeout',
-                    node,
-                },
                 {
                     type: 'sendMessageToNode',
                     node,
@@ -425,10 +591,6 @@ describe('state', () => {
                     },
                 });
                 const effects: Effect<string>[] = [
-                    {
-                        type: 'resetSendHeartbeatMessageTimeout',
-                        node,
-                    },
                     {
                         type: 'sendMessageToNode',
                         node,
@@ -488,10 +650,6 @@ describe('state', () => {
                     },
                 });
                 const effects: Effect<string>[] = [
-                    {
-                        type: 'resetSendHeartbeatMessageTimeout',
-                        node,
-                    },
                     {
                         type: 'sendMessageToNode',
                         node,
