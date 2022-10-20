@@ -92,6 +92,9 @@ describe('state', () => {
                         message: { type: 'appendEntriesResponseOk' },
                         node,
                     },
+                    {
+                        type: 'resetElectionTimeout',
+                    },
                 ];
                 expect(reduce(event, state)).toEqual({
                     newState,
@@ -146,6 +149,9 @@ describe('state', () => {
                             type: 'appendEntriesResponseOk',
                         },
                     },
+                    {
+                        type: 'resetElectionTimeout',
+                    },
                 ];
                 expect(reduce(event, state)).toEqual({
                     newState,
@@ -188,14 +194,15 @@ describe('state', () => {
                             term: 2,
                         },
                     },
+                    {
+                        type: 'resetElectionTimeout',
+                    },
                 ];
                 expect(reduce(event, state)).toEqual({
                     newState: state,
                     effects,
                 });
             });
-
-            it.todo('resets its election timeout');
         });
 
         it('does not expect a timer to expire to send heartbeat messages', () => {

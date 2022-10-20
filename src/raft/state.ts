@@ -213,6 +213,10 @@ function reduceReceivedAppendEntries<LogValueType>({
 }): ReducerResult<LogValueType> {
     switch (state.type) {
         case 'follower': {
+            const resetElectionTimeoutEffect: Effect<LogValueType> = {
+                type: 'resetElectionTimeout',
+            };
+
             if (term < state.currentTerm) {
                 return {
                     newState: state,
@@ -227,6 +231,7 @@ function reduceReceivedAppendEntries<LogValueType>({
                                 prevLogIndex: 0,
                             },
                         },
+                        resetElectionTimeoutEffect,
                     ],
                 };
             }
@@ -257,6 +262,7 @@ function reduceReceivedAppendEntries<LogValueType>({
                                 term,
                             },
                         },
+                        resetElectionTimeoutEffect,
                     ],
                 };
             }
@@ -271,6 +277,7 @@ function reduceReceivedAppendEntries<LogValueType>({
                         },
                         node,
                     },
+                    resetElectionTimeoutEffect,
                 ],
             };
         }
