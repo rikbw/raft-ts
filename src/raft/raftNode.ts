@@ -43,6 +43,7 @@ export class RaftNode<LogValueType> {
             getInitialState(new Log<LogValueType>([]));
         this.logger = createLogger({
             name: `node ${nodeId}`,
+            // TODO configure this top level. Maybe pass logger around?
             level: 'debug',
         });
     }

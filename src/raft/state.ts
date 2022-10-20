@@ -243,7 +243,6 @@ function reduceReceivedAppendEntries<LogValueType>({
                 log: state.log,
             };
 
-            // TODO add a test for this case
             if (!ok) {
                 return {
                     newState,
@@ -262,24 +261,17 @@ function reduceReceivedAppendEntries<LogValueType>({
                 };
             }
 
-            if (term > state.currentTerm) {
-                return {
-                    newState,
-                    effects: [
-                        {
-                            type: 'sendMessageToNode',
-                            message: {
-                                type: 'appendEntriesResponseOk',
-                            },
-                            node,
-                        },
-                    ],
-                };
-            }
-
             return {
                 newState,
-                effects: [],
+                effects: [
+                    {
+                        type: 'sendMessageToNode',
+                        message: {
+                            type: 'appendEntriesResponseOk',
+                        },
+                        node,
+                    },
+                ],
             };
         }
 

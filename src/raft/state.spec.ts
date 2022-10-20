@@ -99,7 +99,7 @@ describe('state', () => {
                 });
             });
 
-            it('appends to its log', () => {
+            it('appends to its log if the previousEntryIdentifier matches', () => {
                 const state = followerState({
                     currentTerm: 2,
                     log: new Log([]),
@@ -138,9 +138,60 @@ describe('state', () => {
                         },
                     ]),
                 });
+                const effects: Array<Effect<string>> = [
+                    {
+                        type: 'sendMessageToNode',
+                        node,
+                        message: {
+                            type: 'appendEntriesResponseOk',
+                        },
+                    },
+                ];
                 expect(reduce(event, state)).toEqual({
                     newState,
-                    effects: [],
+                    effects,
+                });
+            });
+
+            it('does not append to the log if the previousEntryIdentifier does not match', () => {
+                const state = followerState({
+                    currentTerm: 2,
+                    log: new Log([
+                        {
+                            term: 1,
+                            value: 'x <- 2',
+                        },
+                    ]),
+                });
+                const node = 1;
+                const event: Event<string> = {
+                    type: 'receivedMessageFromNode',
+                    node,
+                    message: {
+                        type: 'appendEntries',
+                        term: 2,
+                        previousEntryIdentifier: {
+                            term: 2,
+                            index: 0,
+                        },
+                        entries: [],
+                    },
+                };
+
+                const effects: Array<Effect<string>> = [
+                    {
+                        type: 'sendMessageToNode',
+                        node,
+                        message: {
+                            type: 'appendEntriesResponseNotOk',
+                            prevLogIndex: 0,
+                            term: 2,
+                        },
+                    },
+                ];
+                expect(reduce(event, state)).toEqual({
+                    newState: state,
+                    effects,
                 });
             });
 
