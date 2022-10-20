@@ -219,10 +219,40 @@ describe('state', () => {
             );
         });
 
-        // A mechanism of sending a response should somehow be in the event.
-        it.todo(
-            'lets the calling server know that it has an outdated term when it receives an appendEntries with lower term number',
-        );
+        it('lets the calling server know that it has an outdated term when it receives an appendEntries with lower term number', () => {
+            const state = followerState({
+                currentTerm: 3,
+            });
+            const event: Event<string> = {
+                type: 'receivedMessageFromNode',
+                node: 2,
+                message: {
+                    type: 'appendEntries',
+                    previousEntryIdentifier: undefined,
+                    term: 2,
+                    entries: [],
+                },
+            };
+
+            const effects: Array<Effect<string>> = [
+                {
+                    type: 'sendMessageToNode',
+                    node: 2,
+                    message: {
+                        type: 'appendEntriesResponseNotOk',
+                        prevLogIndex: expect.any(Number),
+                        term: 3,
+                    },
+                },
+                {
+                    type: 'resetElectionTimeout',
+                },
+            ];
+            expect(reduce(event, state)).toEqual({
+                newState: state,
+                effects,
+            });
+        });
     });
 
     describe('candidate', () => {
