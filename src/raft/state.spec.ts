@@ -681,6 +681,72 @@ describe('state', () => {
                 });
             });
         });
+
+        describe('when it receives requestVote', () => {
+            it('votes for servers of higher term and becomes follower of that term', () => {
+                const state = candidateState({
+                    currentTerm: 3,
+                });
+                const event: Event<string> = {
+                    type: 'receivedMessageFromNode',
+                    node: 0,
+                    message: {
+                        type: 'requestVote',
+                        term: 4,
+                    },
+                };
+
+                const newState = followerState({
+                    currentTerm: 4,
+                    votedFor: 0,
+                });
+                const effects: Array<Effect<string>> = [
+                    {
+                        type: 'sendMessageToNode',
+                        node: 0,
+                        message: {
+                            type: 'requestVoteResponse',
+                            voteGranted: true,
+                            term: 4,
+                        },
+                    },
+                ];
+                expect(reduce(event, state)).toEqual({
+                    newState,
+                    effects,
+                });
+            });
+
+            it('does not vote for servers of equal term', () => {
+                const state = candidateState({
+                    currentTerm: 3,
+                });
+                const event: Event<string> = {
+                    type: 'receivedMessageFromNode',
+                    node: 0,
+                    message: {
+                        type: 'requestVote',
+                        term: 3,
+                    },
+                };
+
+                const effects: Array<Effect<string>> = [
+                    {
+                        type: 'sendMessageToNode',
+                        node: 0,
+                        message: {
+                            type: 'requestVoteResponse',
+                            voteGranted: false,
+                            term: 3,
+                        },
+                    },
+                ];
+                expect(reduce(event, state)).toEqual({
+                    newState: state,
+                    effects,
+                });
+            });
+        });
     });
 
     describe('leader', () => {
@@ -891,5 +957,71 @@ describe('state', () => {
         it.todo(
             'sends an empty appendEntries if if receives an appendEntries with a lower term',
         );
+
+        describe('when it receives requestVote', () => {
+            it('votes for servers of higher term and becomes follower of that term', () => {
+                const state = leaderState({
+                    currentTerm: 3,
+                });
+                const event: Event<string> = {
+                    type: 'receivedMessageFromNode',
+                    node: 0,
+                    message: {
+                        type: 'requestVote',
+                        term: 4,
+                    },
+                };
+
+                const newState = followerState({
+                    currentTerm: 4,
+                    votedFor: 0,
+                });
+                const effects: Array<Effect<string>> = [
+                    {
+                        type: 'sendMessageToNode',
+                        node: 0,
+                        message: {
+                            type: 'requestVoteResponse',
+                            voteGranted: true,
+                            term: 4,
+                        },
+                    },
+                ];
+                expect(reduce(event, state)).toEqual({
+                    newState,
+                    effects,
+                });
+            });
+
+            it('does not vote for servers of equal term', () => {
+                const state = candidateState({
+                    currentTerm: 3,
+                });
+                const event: Event<string> = {
+                    type: 'receivedMessageFromNode',
+                    node: 0,
+                    message: {
+                        type: 'requestVote',
+                        term: 3,
+                    },
+                };
+
+                const effects: Array<Effect<string>> = [
+                    {
+                        type: 'sendMessageToNode',
+                        node: 0,
+                        message: {
+                            type: 'requestVoteResponse',
+                            voteGranted: false,
+                            term: 3,
+                        },
+                    },
+                ];
+                expect(reduce(event, state)).toEqual({
+                    newState: state,
+                    effects,
+                });
+            });
+        });
     });
 });

@@ -645,6 +645,20 @@ function reduceReceivedRequestVoteResponse<LogValueType>({
     }
 }
 
+const votedFor = <T>(state: State<T>, node: number): boolean => {
+    switch (state.type) {
+        case 'follower':
+            return state.votedFor === node;
+
+        case 'leader':
+        case 'candidate':
+            return false;
+
+        default:
+            return unreachable(state);
+    }
+};
+
 function reduceReceivedRequestVote<LogValueType>({
     state,
     term,
@@ -654,53 +668,44 @@ function reduceReceivedRequestVote<LogValueType>({
     term: number;
     node: number;
 }): ReducerResult<LogValueType> {
-    switch (state.type) {
-        case 'follower': {
-            if (
-                term < state.currentTerm ||
-                (term === state.currentTerm && state.votedFor !== node)
-            ) {
-                return {
-                    newState: state,
-                    effects: [
-                        {
-                            type: 'sendMessageToNode',
-                            node,
-                            message: {
-                                type: 'requestVoteResponse',
-                                voteGranted: false,
-                                term: state.currentTerm,
-                            },
-                        },
-                    ],
-                };
-            }
-
-            return {
-                newState: {
-                    ...state,
-                    currentTerm: term,
-                    votedFor: node,
-                },
-                effects: [
-                    {
-                        type: 'sendMessageToNode',
-                        node,
-                        message: {
-                            type: 'requestVoteResponse',
-                            voteGranted: true,
-                            term,
-                        },
+    if (
+        term < state.currentTerm ||
+        (term === state.currentTerm && !votedFor(state, node))
+    ) {
+        return {
+            newState: state,
+            effects: [
+                {
+                    type: 'sendMessageToNode',
+                    node,
+                    message: {
+                        type: 'requestVoteResponse',
+                        voteGranted: false,
+                        term: state.currentTerm,
                     },
-                ],
-            };
-        }
-
-        case 'leader':
-        case 'candidate':
-            throw new Error('not implemented');
-
-        default:
-            return unreachable(state);
+                },
+            ],
+        };
     }
+
+    return {
+        newState: {
+            type: 'follower',
+            log: state.log,
+            otherClusterNodes: state.otherClusterNodes,
+            currentTerm: term,
+            votedFor: node,
+        },
+        effects: [
+            {
+                type: 'sendMessageToNode',
+                node,
+                message: {
+                    type: 'requestVoteResponse',
+                    voteGranted: true,
+                    term,
+                },
+            },
+        ],
+    };
 }
