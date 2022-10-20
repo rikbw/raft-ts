@@ -6,6 +6,7 @@
   "author": "Rik Bauwens <rikbauwens1@gmail.com>",
   "license": "MIT",
   "devDependencies": {
+    "@types/bunyan": "^1.8.8",
     "@types/jest": "^29.2.0",
     "@types/koa": "^2.13.5",
     "@types/koa__router": "^12.0.0",
@@ -19,6 +20,7 @@
     "@types/node-fetch": "2",
     "@typescript-eslint/eslint-plugin": "^5.40.0",
     "@typescript-eslint/parser": "^5.40.0",
+    "bunyan": "^1.8.15",
     "eslint": "^8.25.0",
     "fp-ts": "^2.13.0",
     "io-ts": "^2.2.19",

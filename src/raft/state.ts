@@ -231,7 +231,8 @@ function reduceReceivedAppendEntries<LogValueType>({
                 };
             }
 
-            state.log.appendEntries({
+            // TODO make this return the new log instead of mutating it, that doesn't fit with the rest of the app
+            const ok = state.log.appendEntries({
                 previousEntryIdentifier,
                 entries,
             });
@@ -241,6 +242,25 @@ function reduceReceivedAppendEntries<LogValueType>({
                 currentTerm: term,
                 log: state.log,
             };
+
+            // TODO add a test for this case
+            if (!ok) {
+                return {
+                    newState,
+                    effects: [
+                        {
+                            type: 'sendMessageToNode',
+                            node,
+                            message: {
+                                type: 'appendEntriesResponseNotOk',
+                                prevLogIndex:
+                                    previousEntryIdentifier?.index ?? -1,
+                                term,
+                            },
+                        },
+                    ],
+                };
+            }
 
             if (term > state.currentTerm) {
                 return {
