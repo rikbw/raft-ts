@@ -2,15 +2,20 @@
 import { OutgoingMessage, RaftNode } from './raftNode';
 import { State } from './state';
 import { Log } from './log';
+import { createLogger } from 'bunyan';
 
 class TestEnvironment {
     public readonly nodes: Array<RaftNode<string>>;
 
     public constructor(nodeStates: State<string>[]) {
         this.nodes = nodeStates.map((nodeState, index) => {
+            const logger = createLogger({
+                name: `node ${index}`,
+                level: 'debug',
+            });
             return new RaftNode<string>(
                 (message) => this.sendMessage({ message, sender: index }),
-                index,
+                logger,
                 nodeState,
             );
         });

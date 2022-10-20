@@ -519,6 +519,8 @@ describe('state', () => {
             });
         });
 
+        // TODO this isn't entirely correct: this is only correct when appending zero entries.
+        // So we need to know how many entries were appended as well.
         it('updates follower state when it receives that appendEntries is ok', () => {
             const state = leaderState({
                 followerInfo: {

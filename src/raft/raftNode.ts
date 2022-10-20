@@ -25,13 +25,11 @@ export type OutgoingMessage<LogValueType> = NodeMessage<LogValueType> & {
 export class RaftNode<LogValueType> {
     private state: State<LogValueType>;
 
-    private readonly logger: Logger;
-
     public constructor(
         private readonly sendMessage: (
             message: OutgoingMessage<LogValueType>,
         ) => void,
-        nodeId: number,
+        private readonly logger: Logger,
         // TODO when all messages have proper handlers, this won't be necessary anymore.
         // For example, when voting works, we can create a leader by sending it (fake) messages in tests.
         // Now we have to give it an initial state that says it's a leader.
@@ -41,11 +39,6 @@ export class RaftNode<LogValueType> {
             initialStateForTesting ??
             // TODO this should read the log from disk. Should probably be passed down by the caller of this constructor.
             getInitialState(new Log<LogValueType>([]));
-        this.logger = createLogger({
-            name: `node ${nodeId}`,
-            // TODO configure this top level. Maybe pass logger around?
-            level: 'debug',
-        });
     }
 
     public receiveMessage(message: IncomingMessage<LogValueType>) {
@@ -61,7 +54,9 @@ export class RaftNode<LogValueType> {
     }
 
     public sendHeartbeatTimeoutForNode(node: number) {
-        this.logger.debug('heartbeat timeout for node', { node });
+        this.logger.debug('heartbeat timeout for node', {
+            node,
+        });
         this.dispatch({
             type: 'sendHeartbeatMessageTimeout',
             node,
@@ -93,8 +88,10 @@ export class RaftNode<LogValueType> {
                         ...effect.message,
                         receiver: effect.node,
                     };
+                    this.logger.debug('sending message', {
+                        message,
+                    });
                     this.sendMessage(message);
-                    this.logger.debug('sent message', { message });
                     return;
                 }
 
