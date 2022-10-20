@@ -52,21 +52,9 @@ type MutableEvent<LogValueType> =
           node: number;
       }
     | {
-          type: 'receivedAppendEntries';
-          term: number;
+          type: 'receivedMessageFromNode';
           node: number;
-          entries: Array<Entry<LogValueType>>;
-          previousEntryIdentifier: EntryIdentifier | undefined;
-      }
-    | {
-          type: 'receivedAppendEntriesResultOk';
-          node: number;
-      }
-    | {
-          type: 'receivedAppendEntriesResultNotOk';
-          prevLogIndex: number;
-          term: number;
-          node: number;
+          message: NodeMessage<LogValueType>;
       };
 
 export type Event<LogValueType> = Readonly<MutableEvent<LogValueType>>;
@@ -120,28 +108,15 @@ export function reduce<LogValueType>(
         case 'electionTimeout':
             return reduceElectionTimeout(state);
 
-        case 'receivedAppendEntries':
-            return reduceReceivedAppendEntries({
+        case 'receivedMessageFromNode':
+            return reduceReceivedMessage({
                 state,
-                term: event.term,
+                message: event.message,
                 node: event.node,
-                entries: event.entries,
-                previousEntryIdentifier: event.previousEntryIdentifier,
             });
 
         case 'sendHeartbeatMessageTimeout':
             return reduceSendHeartbeatMessageTimeout(state, event.node);
-
-        case 'receivedAppendEntriesResultOk':
-            throw new Error('not implemented');
-
-        case 'receivedAppendEntriesResultNotOk':
-            return receivedAppendEntriesResultNotOk({
-                state,
-                prevLogIndex: event.prevLogIndex,
-                term: event.term,
-                node: event.node,
-            });
 
         default:
             return unreachable(event);
@@ -179,6 +154,38 @@ function reduceElectionTimeout<LogValueType>(
 
         default:
             return unreachable(state);
+    }
+}
+
+function reduceReceivedMessage<LogValueType>({
+    state,
+    message,
+    node,
+}: {
+    state: State<LogValueType>;
+    message: NodeMessage<LogValueType>;
+    node: number;
+}): ReducerResult<LogValueType> {
+    switch (message.type) {
+        case 'appendEntriesResponseOk':
+            throw new Error('not implemented');
+
+        case 'appendEntries':
+            return reduceReceivedAppendEntries({
+                state,
+                entries: message.entries,
+                node,
+                previousEntryIdentifier: message.previousEntryIdentifier,
+                term: message.term,
+            });
+
+        case 'appendEntriesResponseNotOk':
+            return reduceReceivedAppendEntriesResultNotOk({
+                node,
+                prevLogIndex: message.prevLogIndex,
+                state,
+                term: message.term,
+            });
     }
 }
 
@@ -335,7 +342,7 @@ function reduceSendHeartbeatMessageTimeout<LogValueType>(
     }
 }
 
-function receivedAppendEntriesResultNotOk<LogValueType>({
+function reduceReceivedAppendEntriesResultNotOk<LogValueType>({
     state,
     prevLogIndex,
     term,

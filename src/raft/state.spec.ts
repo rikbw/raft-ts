@@ -73,11 +73,14 @@ describe('state', () => {
                 });
                 const node = 1;
                 const event: Event<string> = {
-                    type: 'receivedAppendEntries',
-                    term: 3,
+                    type: 'receivedMessageFromNode',
                     node,
-                    entries: [],
-                    previousEntryIdentifier: undefined,
+                    message: {
+                        type: 'appendEntries',
+                        term: 3,
+                        entries: [],
+                        previousEntryIdentifier: undefined,
+                    },
                 };
 
                 const newState = followerState({
@@ -103,20 +106,23 @@ describe('state', () => {
                 });
                 const node = 1;
                 const event: Event<string> = {
-                    type: 'receivedAppendEntries',
-                    term: 2,
+                    type: 'receivedMessageFromNode',
                     node,
-                    previousEntryIdentifier: undefined,
-                    entries: [
-                        {
-                            term: 1,
-                            value: 'w <- 2',
-                        },
-                        {
-                            term: 1,
-                            value: 'x <- 4',
-                        },
-                    ],
+                    message: {
+                        type: 'appendEntries',
+                        term: 2,
+                        previousEntryIdentifier: undefined,
+                        entries: [
+                            {
+                                term: 1,
+                                value: 'w <- 2',
+                            },
+                            {
+                                term: 1,
+                                value: 'x <- 4',
+                            },
+                        ],
+                    },
                 };
 
                 const newState = followerState({
@@ -278,10 +284,13 @@ describe('state', () => {
                 });
                 const node = 4;
                 const event: Event<string> = {
-                    type: 'receivedAppendEntriesResultNotOk',
-                    prevLogIndex: 1,
-                    term: 2,
+                    type: 'receivedMessageFromNode',
                     node,
+                    message: {
+                        type: 'appendEntriesResponseNotOk',
+                        prevLogIndex: 1,
+                        term: 2,
+                    },
                 };
 
                 const newState = leaderState({
@@ -338,10 +347,13 @@ describe('state', () => {
                 });
                 const node = 4;
                 const event: Event<string> = {
-                    type: 'receivedAppendEntriesResultNotOk',
-                    prevLogIndex: 0,
-                    term: 2,
+                    type: 'receivedMessageFromNode',
                     node,
+                    message: {
+                        type: 'appendEntriesResponseNotOk',
+                        prevLogIndex: 0,
+                        term: 2,
+                    },
                 };
 
                 const newState = leaderState({
