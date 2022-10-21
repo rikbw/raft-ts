@@ -31,7 +31,7 @@ const AppendEntriesResponse = io.type({
 const RequestVote = io.type({
     type: io.literal('requestVote'),
     term: io.number,
-    lastLog: EntryIdentifier
+    lastLog: EntryIdentifier,
 });
 
 const RequestVoteResponse = io.type({
