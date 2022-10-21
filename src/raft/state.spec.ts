@@ -224,7 +224,7 @@ describe('state', () => {
                     node,
                     message: {
                         type: 'appendEntries',
-                        term: 2,
+                        term: 3,
                         previousEntryIdentifier: {
                             term: 2,
                             index: 0,
@@ -241,7 +241,7 @@ describe('state', () => {
                             type: 'appendEntriesResponse',
                             ok: false,
                             prevLogIndexFromRequest: 0,
-                            term: 2,
+                            term: 3,
                             numberOfEntriesSentInRequest: 0,
                         },
                     },
@@ -249,25 +249,28 @@ describe('state', () => {
                         type: 'resetElectionTimeout',
                     },
                 ];
+                const newState = {
+                    ...state,
+                    currentTerm: 3,
+                };
                 expect(reduce(event, state)).toEqual({
-                    newState: state,
+                    newState,
                     effects,
                 });
             });
         });
 
-        it('does not expect a timer to expire to send heartbeat messages', () => {
+        it('ignores heartbeat message timeout timers', () => {
             const state = followerState();
             const event: Event<string> = {
                 type: 'sendHeartbeatMessageTimeout',
                 node: 2,
             };
 
-            expect(() =>
-                reduce(event, state),
-            ).toThrowErrorMatchingInlineSnapshot(
-                '"unreachable: did not expect a send heartbeat message timer to timeout in this state"',
-            );
+            expect(reduce(event, state)).toEqual({
+                newState: state,
+                effects: [],
+            });
         });
 
         it('lets the calling server know that it has an outdated term when it receives an appendEntries with lower term number', () => {
@@ -490,7 +493,7 @@ describe('state', () => {
                 });
             });
 
-            it('does not vote if the requesters latest log term is out of date', () => {
+            it('does not vote if the requesters latest log term is out of date (but does update its term)', () => {
                 const state = followerState({
                     log: new Log([
                         {
@@ -498,6 +501,7 @@ describe('state', () => {
                             value: 'x <- 2',
                         },
                     ]),
+                    currentTerm: 2,
                 });
                 const event: Event<string> = {
                     type: 'receivedMessageFromNode',
@@ -523,8 +527,12 @@ describe('state', () => {
                         },
                     },
                 ];
+                const newState = {
+                    ...state,
+                    currentTerm: 3,
+                };
                 expect(reduce(event, state)).toEqual({
-                    newState: state,
+                    newState,
                     effects,
                 });
             });
@@ -567,8 +575,12 @@ describe('state', () => {
                         },
                     },
                 ];
+                const newState = {
+                    ...state,
+                    currentTerm: 3,
+                };
                 expect(reduce(event, state)).toEqual({
-                    newState: state,
+                    newState,
                     effects,
                 });
             });
@@ -639,18 +651,17 @@ describe('state', () => {
             });
         });
 
-        it('does not expect a timer to expire to send heartbeat messages', () => {
+        it('ignores heartbeat message timeouts', () => {
             const state = candidateState();
             const event: Event<string> = {
                 type: 'sendHeartbeatMessageTimeout',
                 node: 2,
             };
 
-            expect(() =>
-                reduce(event, state),
-            ).toThrowErrorMatchingInlineSnapshot(
-                '"unreachable: did not expect a send heartbeat message timer to timeout in this state"',
-            );
+            expect(reduce(event, state)).toEqual({
+                newState: state,
+                effects: [],
+            });
         });
 
         it('transitions to follower if it receives an appendEntries of equal or higher term', () => {
@@ -1070,6 +1081,31 @@ describe('state', () => {
                     effects,
                 });
             });
+
+            it('steps down if the term of the response is higher', () => {
+                const state = leaderState({
+                    currentTerm: 1,
+                });
+                const event: Event<string> = {
+                    type: 'receivedMessageFromNode',
+                    node: 1,
+                    message: {
+                        type: 'appendEntriesResponse',
+                        ok: false,
+                        term: 2,
+                        numberOfEntriesSentInRequest: 0,
+                        prevLogIndexFromRequest: -1,
+                    },
+                };
+
+                const newState = followerState({
+                    currentTerm: 2,
+                });
+                expect(reduce(event, state)).toEqual({
+                    newState,
+                    effects: [],
+                });
+            });
         });
 
         describe('when it receives that appendEntries is ok', () => {
@@ -1152,19 +1188,100 @@ describe('state', () => {
                     ).toEqual(expectedNextIndex);
                 },
             );
+
+            it('steps down if the term of the response is higher', () => {
+                const state = leaderState({
+                    currentTerm: 1,
+                });
+                const event: Event<string> = {
+                    type: 'receivedMessageFromNode',
+                    node: 1,
+                    message: {
+                        type: 'appendEntriesResponse',
+                        prevLogIndexFromRequest: -1,
+                        ok: true,
+                        term: 2,
+                        numberOfEntriesSentInRequest: 0,
+                    },
+                };
+
+                const newState = followerState({
+                    currentTerm: 2,
+                });
+                expect(reduce(event, state)).toEqual({
+                    newState,
+                    effects: [],
+                });
+            });
         });
 
-        it.todo(
-            'transitions to follower if it receives an appendEntries of higher term',
-        );
+        it('transitions to follower if it receives an appendEntries of higher term', () => {
+            const state = leaderState({
+                currentTerm: 1,
+            });
+            const event: Event<string> = {
+                type: 'receivedMessageFromNode',
+                node: 1,
+                message: {
+                    type: 'appendEntries',
+                    term: 2,
+                    entries: [],
+                    previousEntryIdentifier: undefined,
+                },
+            };
 
-        it.todo(
-            'crashes (?) if if receives an appendEntries of equal term (should be unreachable)',
-        );
+            const newState = followerState({
+                currentTerm: 2,
+            });
+            expect(reduce(event, state)).toEqual({
+                newState,
+                effects: [],
+            });
+        });
 
-        it.todo(
-            'sends an empty appendEntries if if receives an appendEntries with a lower term',
-        );
+        it('crashes (?) if if receives an appendEntries of equal term (should be unreachable)', () => {
+            const state = leaderState({
+                currentTerm: 1,
+            });
+            const event: Event<string> = {
+                type: 'receivedMessageFromNode',
+                node: 1,
+                message: {
+                    type: 'appendEntries',
+                    term: 1,
+                    entries: [],
+                    previousEntryIdentifier: undefined,
+                },
+            };
+
+            expect(() => {
+                reduce(event, state);
+            }).toThrowErrorMatchingInlineSnapshot(
+                '"unreachable: a node thinks it is leader of the same term as this node"',
+            );
+        });
+
+        it('ignores the message if receives an appendEntries with a lower term', () => {
+            // It will send a heartbeat soon anyway. An optimization would be to immediately send appendEntries.
+            const state = leaderState({
+                currentTerm: 1,
+            });
+            const event: Event<string> = {
+                type: 'receivedMessageFromNode',
+                node: 1,
+                message: {
+                    type: 'appendEntries',
+                    term: 0,
+                    entries: [],
+                    previousEntryIdentifier: undefined,
+                },
+            };
+
+            expect(reduce(event, state)).toEqual({
+                newState: state,
+                effects: [],
+            });
+        });
 
         describe('when it receives requestVote', () => {
             it('votes for servers of higher term and becomes follower of that term', () => {

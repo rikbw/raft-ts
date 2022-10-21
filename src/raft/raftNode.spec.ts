@@ -126,8 +126,14 @@ describe('RaftNode', () => {
 
         environment.nodes[2]!.leaderElectionTimeout();
 
-        // Node 0 should still be leader and node 2 be a follower.
-        expect(environment.nodes[0]!.__stateForTests.type).toEqual('leader');
+        // Node 0 should be follower (because it received a response with a request with a higher term) and node 2 be a candidate.
+        expect(environment.nodes[0]!.__stateForTests.type).toEqual('follower');
         expect(environment.nodes[2]!.__stateForTests.type).toEqual('candidate');
+
+        // Node 1 can get elected
+        environment.nodes[1]!.leaderElectionTimeout();
+        expect(environment.nodes[0]!.__stateForTests.type).toEqual('follower');
+        expect(environment.nodes[1]!.__stateForTests.type).toEqual('leader');
+        expect(environment.nodes[2]!.__stateForTests.type).toEqual('follower');
     });
 });

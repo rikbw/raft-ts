@@ -387,7 +387,29 @@ function reduceReceivedAppendEntries<LogValueType>({
             };
 
         case 'leader':
-            throw new Error('not implemented');
+            if (term > state.currentTerm) {
+                return {
+                    newState: {
+                        type: 'follower',
+                        log: state.log,
+                        otherClusterNodes: state.otherClusterNodes,
+                        currentTerm: term,
+                        votedFor: undefined,
+                    },
+                    effects: [],
+                };
+            }
+
+            if (term === state.currentTerm) {
+                throw new Error(
+                    'unreachable: a node thinks it is leader of the same term as this node',
+                );
+            }
+
+            return {
+                newState: state,
+                effects: [],
+            };
 
         default:
             return unreachable(state);
@@ -460,9 +482,10 @@ function reduceSendHeartbeatMessageTimeout<LogValueType>(
 
         case 'candidate':
         case 'follower':
-            throw new Error(
-                'unreachable: did not expect a send heartbeat message timer to timeout in this state',
-            );
+            return {
+                newState: state,
+                effects: [],
+            };
 
         default:
             return unreachable(state);
@@ -486,20 +509,20 @@ function reduceReceivedAppendEntriesResponse<LogValueType>({
 }): ReducerResult<LogValueType> {
     switch (state.type) {
         case 'leader': {
-            if (!ok) {
-                if (term > state.currentTerm) {
-                    return {
-                        newState: {
-                            type: 'follower',
-                            log: state.log,
-                            currentTerm: term,
-                            otherClusterNodes: state.otherClusterNodes,
-                            votedFor: undefined,
-                        },
-                        effects: [],
-                    };
-                }
+            if (term > state.currentTerm) {
+                return {
+                    newState: {
+                        type: 'follower',
+                        log: state.log,
+                        currentTerm: term,
+                        otherClusterNodes: state.otherClusterNodes,
+                        votedFor: undefined,
+                    },
+                    effects: [],
+                };
+            }
 
+            if (!ok) {
                 const newState: LeaderState<LogValueType> = {
                     ...state,
                     followerInfo: {
@@ -711,8 +734,18 @@ function reduceReceivedRequestVote<LogValueType>({
         term < state.currentTerm ||
         (term === state.currentTerm && !votedFor(state, node))
     ) {
+        const newState: State<LogValueType> =
+            term > state.currentTerm
+                ? {
+                      type: 'follower',
+                      log: state.log,
+                      votedFor: undefined,
+                      otherClusterNodes: state.otherClusterNodes,
+                      currentTerm: term,
+                  }
+                : state;
         return {
-            newState: state,
+            newState,
             effects: [
                 {
                     type: 'sendMessageToNode',
