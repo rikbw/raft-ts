@@ -1,7 +1,7 @@
 import { unreachable } from '../util/unreachable';
 import { Entry, EntryIdentifier, Log } from './log';
 
-type FollowerInfo = Record<number, { nextIndex: number }>;
+type FollowerInfo = Record<number, { nextIndex: number; matchIndex: number }>;
 
 type MutableState<LogValueType> =
     | {
@@ -540,6 +540,8 @@ function reduceReceivedAppendEntriesResponse<LogValueType>({
                             // edge case: if prevLogIndexFromRequest === -1, which can happen if the log is empty,
                             // we should just set nextIndex to 0.
                             nextIndex: Math.max(prevLogIndexFromRequest, 0),
+                            matchIndex:
+                                state.followerInfo[node]?.matchIndex ?? 0,
                         },
                     },
                 };
@@ -565,6 +567,7 @@ function reduceReceivedAppendEntriesResponse<LogValueType>({
                     ...state.followerInfo,
                     [node]: {
                         nextIndex,
+                        matchIndex: state.followerInfo[node]?.matchIndex ?? 0,
                     },
                 },
             };
@@ -617,7 +620,10 @@ function reduceReceivedRequestVoteResponse<LogValueType>({
                 const followerInfo = state.otherClusterNodes.reduce(
                     (prev: FollowerInfo, node) => ({
                         ...prev,
-                        [node]: { nextIndex: state.log.getEntries().length },
+                        [node]: {
+                            nextIndex: state.log.getEntries().length,
+                            matchIndex: 0,
+                        },
                     }),
                     {},
                 );

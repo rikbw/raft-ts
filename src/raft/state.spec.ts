@@ -760,8 +760,8 @@ describe('state', () => {
                     currentTerm: 1,
                     otherClusterNodes: state.otherClusterNodes,
                     followerInfo: {
-                        1: { nextIndex: 1 },
-                        2: { nextIndex: 1 },
+                        1: { nextIndex: 1, matchIndex: 0 },
+                        2: { nextIndex: 1, matchIndex: 0 },
                     },
                     log: state.log,
                 });
@@ -991,6 +991,7 @@ describe('state', () => {
                     followerInfo: {
                         [node]: {
                             nextIndex: 1,
+                            matchIndex: 0,
                         },
                     },
                 });
@@ -1052,6 +1053,7 @@ describe('state', () => {
                     followerInfo: {
                         [node]: {
                             nextIndex: 0,
+                            matchIndex: 0,
                         },
                     },
                 });
@@ -1362,8 +1364,8 @@ describe('state', () => {
                 ]),
                 otherClusterNodes: [0, 2],
                 followerInfo: {
-                    0: { nextIndex: 1 },
-                    2: { nextIndex: 0 },
+                    0: { nextIndex: 1, matchIndex: 0 },
+                    2: { nextIndex: 0, matchIndex: 0 },
                 },
             });
             const event: Event<string> = {
