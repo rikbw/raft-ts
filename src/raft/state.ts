@@ -450,33 +450,40 @@ function previousEntryIdentifierFromNextIndex<ValueType>(
     };
 }
 
+function sendAppendEntriesEffect<LogValueType>({
+    node,
+    state,
+}: {
+    node: number;
+    state: LeaderState<LogValueType>;
+}): Effect<LogValueType> {
+    const nextIndex = nextIndexForNode(state, node);
+    const entries = state.log.getEntries().slice(nextIndex);
+
+    return {
+        type: 'sendMessageToNode',
+        message: {
+            type: 'appendEntries',
+            term: state.currentTerm,
+            previousEntryIdentifier: previousEntryIdentifierFromNextIndex(
+                state.log,
+                nextIndex,
+            ),
+            entries,
+        },
+        node,
+    };
+}
+
 function reduceSendHeartbeatMessageTimeout<LogValueType>(
     state: State<LogValueType>,
     node: number,
 ): ReducerResult<LogValueType> {
     switch (state.type) {
         case 'leader': {
-            const nextIndex = nextIndexForNode(state, node);
-            const entries = state.log.getEntries().slice(nextIndex);
             return {
                 newState: state,
-                effects: [
-                    {
-                        type: 'sendMessageToNode',
-                        message: {
-                            type: 'appendEntries',
-                            term: state.currentTerm,
-                            // TODO test this value
-                            previousEntryIdentifier:
-                                previousEntryIdentifierFromNextIndex(
-                                    state.log,
-                                    nextIndex,
-                                ),
-                            entries,
-                        },
-                        node,
-                    },
-                ],
+                effects: [sendAppendEntriesEffect({ node, state })],
             };
         }
 
@@ -537,25 +544,10 @@ function reduceReceivedAppendEntriesResponse<LogValueType>({
                     },
                 };
 
-                const nextIndex = nextIndexForNode(newState, node);
-                const entries = state.log.getEntries().slice(nextIndex);
                 return {
                     newState,
                     effects: [
-                        {
-                            type: 'sendMessageToNode',
-                            node,
-                            message: {
-                                type: 'appendEntries',
-                                term: state.currentTerm,
-                                previousEntryIdentifier:
-                                    previousEntryIdentifierFromNextIndex(
-                                        newState.log,
-                                        nextIndex,
-                                    ),
-                                entries,
-                            },
-                        },
+                        sendAppendEntriesEffect({ node, state: newState }),
                     ],
                 };
             }
@@ -622,27 +614,6 @@ function reduceReceivedRequestVoteResponse<LogValueType>({
             const votes = voteGranted ? state.votes.add(node) : state.votes;
 
             if (votes.size + 1 > state.otherClusterNodes.length / 2) {
-                const nextIndex = state.log.getEntries().length;
-
-                const appendEntriesMessage: NodeMessage<LogValueType> = {
-                    type: 'appendEntries',
-                    entries: [],
-                    previousEntryIdentifier:
-                        previousEntryIdentifierFromNextIndex(
-                            state.log,
-                            nextIndex,
-                        ),
-                    term: state.currentTerm,
-                };
-
-                const effects = state.otherClusterNodes.map(
-                    (node): Effect<LogValueType> => ({
-                        type: 'sendMessageToNode',
-                        node,
-                        message: appendEntriesMessage,
-                    }),
-                );
-
                 const followerInfo = state.otherClusterNodes.reduce(
                     (prev: FollowerInfo, node) => ({
                         ...prev,
@@ -651,14 +622,20 @@ function reduceReceivedRequestVoteResponse<LogValueType>({
                     {},
                 );
 
+                const newState: LeaderState<LogValueType> = {
+                    type: 'leader',
+                    log: state.log,
+                    otherClusterNodes: state.otherClusterNodes,
+                    currentTerm: state.currentTerm,
+                    followerInfo,
+                };
+
+                const effects = state.otherClusterNodes.map((node) =>
+                    sendAppendEntriesEffect({ node, state: newState }),
+                );
+
                 return {
-                    newState: {
-                        type: 'leader',
-                        log: state.log,
-                        otherClusterNodes: state.otherClusterNodes,
-                        currentTerm: state.currentTerm,
-                        followerInfo,
-                    },
+                    newState,
                     effects,
                 };
             }
@@ -807,22 +784,8 @@ function reduceClientAppendToLog<LogValueType>(
     }
 
     const effects = state.otherClusterNodes.map(
-        (node): Effect<LogValueType> => {
-            const nextIndex = nextIndexForNode(state, node);
-            const entries = state.log.getEntries().slice(nextIndex);
-            const previousEntryIdentifier =
-                previousEntryIdentifierFromNextIndex(state.log, nextIndex);
-            return {
-                type: 'sendMessageToNode',
-                node,
-                message: {
-                    type: 'appendEntries',
-                    previousEntryIdentifier,
-                    entries,
-                    term: state.currentTerm,
-                },
-            };
-        },
+        (node): Effect<LogValueType> =>
+            sendAppendEntriesEffect({ state, node }),
     );
 
     return {
