@@ -10,6 +10,7 @@ type MutableState<LogValueType> =
           log: Log<LogValueType>;
           otherClusterNodes: ReadonlyArray<number>;
           votedFor: number | undefined;
+          commitIndex: number;
       }
     | {
           type: 'leader';
@@ -17,6 +18,7 @@ type MutableState<LogValueType> =
           log: Log<LogValueType>;
           followerInfo: FollowerInfo;
           otherClusterNodes: ReadonlyArray<number>;
+          commitIndex: number;
       }
     | {
           type: 'candidate';
@@ -24,6 +26,7 @@ type MutableState<LogValueType> =
           votes: Set<number>;
           log: Log<LogValueType>;
           otherClusterNodes: ReadonlyArray<number>;
+          commitIndex: number;
       };
 
 export type State<LogValueType> = Readonly<MutableState<LogValueType>>;
@@ -48,6 +51,7 @@ export function getInitialState<LogValueType>(
         log,
         otherClusterNodes,
         votedFor: undefined,
+        commitIndex: 0,
     };
 }
 
@@ -171,6 +175,7 @@ function reduceElectionTimeout<LogValueType>(
                     log: state.log,
                     votes: new Set(),
                     otherClusterNodes: state.otherClusterNodes,
+                    commitIndex: state.commitIndex,
                 },
                 effects: [
                     ...voteRequests,
@@ -290,6 +295,7 @@ function reduceReceivedAppendEntries<LogValueType>({
                 log: state.log,
                 otherClusterNodes: state.otherClusterNodes,
                 votedFor: undefined,
+                commitIndex: state.commitIndex,
             };
 
             const prevLogIndexFromRequest =
@@ -342,6 +348,7 @@ function reduceReceivedAppendEntries<LogValueType>({
                     currentTerm: term,
                     otherClusterNodes: state.otherClusterNodes,
                     votedFor: undefined,
+                    commitIndex: state.commitIndex,
                 };
 
                 const prevLogIndexFromRequest =
@@ -395,6 +402,7 @@ function reduceReceivedAppendEntries<LogValueType>({
                         otherClusterNodes: state.otherClusterNodes,
                         currentTerm: term,
                         votedFor: undefined,
+                        commitIndex: state.commitIndex,
                     },
                     effects: [],
                 };
@@ -524,6 +532,7 @@ function reduceReceivedAppendEntriesResponse<LogValueType>({
                         currentTerm: term,
                         otherClusterNodes: state.otherClusterNodes,
                         votedFor: undefined,
+                        commitIndex: state.commitIndex,
                     },
                     effects: [],
                 };
@@ -615,6 +624,7 @@ function reduceReceivedRequestVoteResponse<LogValueType>({
                         otherClusterNodes: state.otherClusterNodes,
                         log: state.log,
                         votedFor: undefined,
+                        commitIndex: state.commitIndex,
                     },
                     effects: [],
                 };
@@ -640,6 +650,7 @@ function reduceReceivedRequestVoteResponse<LogValueType>({
                     otherClusterNodes: state.otherClusterNodes,
                     currentTerm: state.currentTerm,
                     followerInfo,
+                    commitIndex: state.commitIndex,
                 };
 
                 const effects = state.otherClusterNodes.map((node) =>
@@ -731,6 +742,7 @@ function reduceReceivedRequestVote<LogValueType>({
                       votedFor: undefined,
                       otherClusterNodes: state.otherClusterNodes,
                       currentTerm: term,
+                      commitIndex: state.commitIndex,
                   }
                 : state;
         return {
@@ -756,6 +768,7 @@ function reduceReceivedRequestVote<LogValueType>({
             otherClusterNodes: state.otherClusterNodes,
             currentTerm: term,
             votedFor: node,
+            commitIndex: state.commitIndex,
         },
         effects: [
             {

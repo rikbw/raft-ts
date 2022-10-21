@@ -14,12 +14,14 @@ const followerState = ({
     log = new Log([]),
     otherClusterNodes = [],
     votedFor = undefined,
+    commitIndex = 0,
 }: Partial<FollowerState<string>> = {}): FollowerState<string> => ({
     type: 'follower',
     currentTerm,
     log,
     otherClusterNodes,
     votedFor,
+    commitIndex,
 });
 
 const candidateState = ({
@@ -27,12 +29,14 @@ const candidateState = ({
     log = new Log([]),
     otherClusterNodes = [],
     votes = new Set(),
+    commitIndex = 0,
 }: Partial<CandidateState<string>> = {}): CandidateState<string> => ({
     type: 'candidate',
     currentTerm,
     log,
     otherClusterNodes,
     votes,
+    commitIndex,
 });
 
 const leaderState = ({
@@ -40,12 +44,14 @@ const leaderState = ({
     log = new Log([]),
     followerInfo = {},
     otherClusterNodes = [],
+    commitIndex = 0,
 }: Partial<LeaderState<string>> = {}): LeaderState<string> => ({
     type: 'leader',
     currentTerm,
     log,
     followerInfo,
     otherClusterNodes,
+    commitIndex,
 });
 
 describe('state', () => {
