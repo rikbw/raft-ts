@@ -115,7 +115,9 @@ describe('state', () => {
                     {
                         type: 'sendMessageToNode',
                         message: {
-                            type: 'appendEntriesResponseOk',
+                            type: 'appendEntriesResponse',
+                            ok: true,
+                            term: 3,
                             prevLogIndexFromRequest: -1,
                         },
                         node,
@@ -174,7 +176,9 @@ describe('state', () => {
                         type: 'sendMessageToNode',
                         node,
                         message: {
-                            type: 'appendEntriesResponseOk',
+                            type: 'appendEntriesResponse',
+                            ok: true,
+                            term: 2,
                             prevLogIndexFromRequest: -1,
                         },
                     },
@@ -218,7 +222,8 @@ describe('state', () => {
                         type: 'sendMessageToNode',
                         node,
                         message: {
-                            type: 'appendEntriesResponseNotOk',
+                            type: 'appendEntriesResponse',
+                            ok: false,
                             prevLogIndexFromRequest: 0,
                             term: 2,
                         },
@@ -268,7 +273,8 @@ describe('state', () => {
                     type: 'sendMessageToNode',
                     node: 2,
                     message: {
-                        type: 'appendEntriesResponseNotOk',
+                        type: 'appendEntriesResponse',
+                        ok: false,
                         prevLogIndexFromRequest: expect.any(Number),
                         term: 3,
                     },
@@ -531,7 +537,9 @@ describe('state', () => {
                     type: 'sendMessageToNode',
                     node: 2,
                     message: {
-                        type: 'appendEntriesResponseOk',
+                        type: 'appendEntriesResponse',
+                        ok: true,
+                        term: 2,
                         prevLogIndexFromRequest: expect.any(Number),
                     },
                 },
@@ -565,7 +573,8 @@ describe('state', () => {
                     type: 'sendMessageToNode',
                     node: 1,
                     message: {
-                        type: 'appendEntriesResponseNotOk',
+                        type: 'appendEntriesResponse',
+                        ok: false,
                         term: 1,
                         prevLogIndexFromRequest: expect.any(Number),
                     },
@@ -813,7 +822,8 @@ describe('state', () => {
                     type: 'receivedMessageFromNode',
                     node,
                     message: {
-                        type: 'appendEntriesResponseNotOk',
+                        type: 'appendEntriesResponse',
+                        ok: false,
                         prevLogIndexFromRequest: 1,
                         term: 2,
                     },
@@ -872,7 +882,8 @@ describe('state', () => {
                     type: 'receivedMessageFromNode',
                     node,
                     message: {
-                        type: 'appendEntriesResponseNotOk',
+                        type: 'appendEntriesResponse',
+                        ok: false,
                         prevLogIndexFromRequest: 0,
                         term: 2,
                     },
@@ -928,7 +939,9 @@ describe('state', () => {
                 type: 'receivedMessageFromNode',
                 node: 2,
                 message: {
-                    type: 'appendEntriesResponseOk',
+                    type: 'appendEntriesResponse',
+                    ok: true,
+                    term: state.currentTerm,
                     prevLogIndexFromRequest: 2,
                 },
             };
