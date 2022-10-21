@@ -54,6 +54,12 @@ describe('state', () => {
             const state = followerState({
                 currentTerm: 0,
                 otherClusterNodes: [0, 2],
+                log: new Log([
+                    {
+                        term: 0,
+                        value: 'x <- 2',
+                    },
+                ]),
             });
             const event: Event<string> = {
                 type: 'electionTimeout',
@@ -71,6 +77,10 @@ describe('state', () => {
                     message: {
                         type: 'requestVote',
                         term: 1,
+                        lastLog: {
+                            term: 0,
+                            index: 0,
+                        },
                     },
                 },
                 {
@@ -79,6 +89,10 @@ describe('state', () => {
                     message: {
                         type: 'requestVote',
                         term: 1,
+                        lastLog: {
+                            term: 0,
+                            index: 0,
+                        },
                     },
                 },
                 {
@@ -305,6 +319,7 @@ describe('state', () => {
                     message: {
                         type: 'requestVote',
                         term: 1,
+                        lastLog: undefined,
                     },
                 };
 
@@ -333,6 +348,12 @@ describe('state', () => {
                 const state = followerState({
                     currentTerm: 0,
                     votedFor: 0,
+                    log: new Log([
+                        {
+                            term: 0,
+                            value: 'x <- 9',
+                        },
+                    ]),
                 });
                 const event: Event<string> = {
                     type: 'receivedMessageFromNode',
@@ -340,12 +361,17 @@ describe('state', () => {
                     message: {
                         type: 'requestVote',
                         term: 1,
+                        lastLog: {
+                            index: 0,
+                            term: 0,
+                        },
                     },
                 };
 
                 const newState = followerState({
                     currentTerm: 1,
                     votedFor: 0,
+                    log: state.log,
                 });
                 const effects: Array<Effect<string>> = [
                     {
@@ -375,6 +401,7 @@ describe('state', () => {
                     message: {
                         type: 'requestVote',
                         term: 1,
+                        lastLog: undefined,
                     },
                 };
 
@@ -406,6 +433,7 @@ describe('state', () => {
                     message: {
                         type: 'requestVote',
                         term: 0,
+                        lastLog: undefined,
                     },
                 };
 
@@ -437,6 +465,7 @@ describe('state', () => {
                     message: {
                         type: 'requestVote',
                         term: 2,
+                        lastLog: undefined,
                     },
                 };
 
@@ -457,6 +486,89 @@ describe('state', () => {
                 ];
                 expect(reduce(event, state)).toEqual({
                     newState,
+                    effects,
+                });
+            });
+
+            it('does not vote if the requesters latest log term is out of date', () => {
+                const state = followerState({
+                    log: new Log([
+                        {
+                            term: 2,
+                            value: 'x <- 2',
+                        },
+                    ]),
+                });
+                const event: Event<string> = {
+                    type: 'receivedMessageFromNode',
+                    node: 0,
+                    message: {
+                        type: 'requestVote',
+                        lastLog: {
+                            index: 1,
+                            term: 1,
+                        },
+                        term: 3,
+                    },
+                };
+
+                const effects: Array<Effect<string>> = [
+                    {
+                        type: 'sendMessageToNode',
+                        node: 0,
+                        message: {
+                            type: 'requestVoteResponse',
+                            voteGranted: false,
+                            term: state.currentTerm,
+                        },
+                    },
+                ];
+                expect(reduce(event, state)).toEqual({
+                    newState: state,
+                    effects,
+                });
+            });
+
+            it('does not vote if the requesters latest log index is out of date', () => {
+                const state = followerState({
+                    log: new Log([
+                        {
+                            term: 2,
+                            value: 'x <- 2',
+                        },
+                        {
+                            term: 2,
+                            value: 'y <- 2',
+                        },
+                    ]),
+                    currentTerm: 2,
+                });
+                const event: Event<string> = {
+                    type: 'receivedMessageFromNode',
+                    node: 0,
+                    message: {
+                        type: 'requestVote',
+                        lastLog: {
+                            index: 0,
+                            term: 2,
+                        },
+                        term: 3,
+                    },
+                };
+
+                const effects: Array<Effect<string>> = [
+                    {
+                        type: 'sendMessageToNode',
+                        node: 0,
+                        message: {
+                            type: 'requestVoteResponse',
+                            voteGranted: false,
+                            term: 2,
+                        },
+                    },
+                ];
+                expect(reduce(event, state)).toEqual({
+                    newState: state,
                     effects,
                 });
             });
@@ -505,6 +617,7 @@ describe('state', () => {
                     message: {
                         type: 'requestVote',
                         term: 3,
+                        lastLog: undefined,
                     },
                 },
                 {
@@ -513,6 +626,7 @@ describe('state', () => {
                     message: {
                         type: 'requestVote',
                         term: 3,
+                        lastLog: undefined,
                     },
                 },
                 {
@@ -729,6 +843,10 @@ describe('state', () => {
                     message: {
                         type: 'requestVote',
                         term: 4,
+                        lastLog: {
+                            term: 2,
+                            index: 2,
+                        },
                     },
                 };
 
@@ -763,6 +881,7 @@ describe('state', () => {
                     message: {
                         type: 'requestVote',
                         term: 3,
+                        lastLog: undefined,
                     },
                 };
 
@@ -1058,6 +1177,7 @@ describe('state', () => {
                     message: {
                         type: 'requestVote',
                         term: 4,
+                        lastLog: undefined,
                     },
                 };
 
@@ -1092,6 +1212,7 @@ describe('state', () => {
                     message: {
                         type: 'requestVote',
                         term: 3,
+                        lastLog: undefined,
                     },
                 };
 

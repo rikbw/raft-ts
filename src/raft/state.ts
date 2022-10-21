@@ -86,9 +86,9 @@ export type NodeMessage<LogValueType> =
           term: number;
       }
     | {
-          // TODO implement leader completeness
           type: 'requestVote';
           term: number;
+          lastLog: EntryIdentifier | undefined;
       }
     | {
           type: 'requestVoteResponse';
@@ -160,6 +160,7 @@ function reduceElectionTimeout<LogValueType>(
                     message: {
                         type: 'requestVote',
                         term: newTerm,
+                        lastLog: lastEntryIdentifierFromState(state),
                     },
                 }),
             );
@@ -228,6 +229,7 @@ function reduceReceivedMessage<LogValueType>({
                 state,
                 term: message.term,
                 node,
+                lastLog: message.lastLog,
             });
 
         default:
@@ -674,16 +676,38 @@ const votedFor = <T>(state: State<T>, node: number): boolean => {
     }
 };
 
+function requestLastLogIsNotUpToDate({
+    requestLastLog = { term: -1, index: -1 },
+    stateLastLog = { term: -1, index: -1 },
+}: {
+    requestLastLog: EntryIdentifier | undefined;
+    stateLastLog: EntryIdentifier | undefined;
+}) {
+    return (
+        requestLastLog.term < stateLastLog.term ||
+        (requestLastLog.term === stateLastLog.term &&
+            requestLastLog.index < stateLastLog.index)
+    );
+}
+
 function reduceReceivedRequestVote<LogValueType>({
     state,
     term,
     node,
+    lastLog,
 }: {
     state: State<LogValueType>;
     term: number;
     node: number;
+    lastLog: EntryIdentifier | undefined;
 }): ReducerResult<LogValueType> {
+    const stateLastLog = lastEntryIdentifierFromState(state);
+
     if (
+        requestLastLogIsNotUpToDate({
+            requestLastLog: lastLog,
+            stateLastLog,
+        }) ||
         term < state.currentTerm ||
         (term === state.currentTerm && !votedFor(state, node))
     ) {
@@ -733,10 +757,7 @@ function reduceClientAppendToLog<LogValueType>(
         throw new Error('can only append to log of leader node');
     }
 
-    const previousEntryIdentifier = previousEntryIdentifierFromNextIndex(
-        state.log,
-        state.log.getEntries().length,
-    );
+    const previousEntryIdentifier = lastEntryIdentifierFromState(state);
 
     const ok = state.log.appendEntries({
         previousEntryIdentifier,
@@ -775,4 +796,13 @@ function reduceClientAppendToLog<LogValueType>(
         newState: state,
         effects,
     };
+}
+
+function lastEntryIdentifierFromState<LogValueType>(
+    state: State<LogValueType>,
+) {
+    return previousEntryIdentifierFromNextIndex(
+        state.log,
+        state.log.getEntries().length,
+    );
 }
