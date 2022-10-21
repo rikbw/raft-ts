@@ -1,14 +1,16 @@
 import * as io from 'io-ts';
 
+const EntryIdentifier = io.union([
+    io.undefined,
+    io.type({
+        index: io.number,
+        term: io.number,
+    }),
+]);
+
 const AppendEntries = io.type({
     type: io.literal('appendEntries'),
-    previousEntryIdentifier: io.union([
-        io.undefined,
-        io.type({
-            index: io.number,
-            term: io.number,
-        }),
-    ]),
+    previousEntryIdentifier: EntryIdentifier,
     term: io.number,
     entries: io.array(
         io.type({
@@ -29,6 +31,7 @@ const AppendEntriesResponse = io.type({
 const RequestVote = io.type({
     type: io.literal('requestVote'),
     term: io.number,
+    lastLog: EntryIdentifier
 });
 
 const RequestVoteResponse = io.type({
