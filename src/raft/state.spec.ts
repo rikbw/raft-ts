@@ -760,8 +760,8 @@ describe('state', () => {
                     currentTerm: 1,
                     otherClusterNodes: state.otherClusterNodes,
                     followerInfo: {
-                        1: { nextIndex: 1, matchIndex: 0 },
-                        2: { nextIndex: 1, matchIndex: 0 },
+                        1: { nextIndex: 1, matchIndex: -1 },
+                        2: { nextIndex: 1, matchIndex: -1 },
                     },
                     log: state.log,
                 });
@@ -991,7 +991,7 @@ describe('state', () => {
                     followerInfo: {
                         [node]: {
                             nextIndex: 1,
-                            matchIndex: 0,
+                            matchIndex: -1,
                         },
                     },
                 });
@@ -1053,7 +1053,7 @@ describe('state', () => {
                     followerInfo: {
                         [node]: {
                             nextIndex: 0,
-                            matchIndex: 0,
+                            matchIndex: -1,
                         },
                     },
                 });
@@ -1116,6 +1116,7 @@ describe('state', () => {
                 numberOfEntriesSent: number;
                 previousEntryIndex: number;
                 expectedNextIndex: number;
+                expectedMatchIndex: number;
             };
 
             const testCases: TestCase[] = [
@@ -1124,36 +1125,42 @@ describe('state', () => {
                     numberOfEntriesSent: 0,
                     previousEntryIndex: -1,
                     expectedNextIndex: 0,
+                    expectedMatchIndex: -1,
                 },
                 {
                     logLength: 1,
                     numberOfEntriesSent: 1,
                     previousEntryIndex: -1,
                     expectedNextIndex: 1,
+                    expectedMatchIndex: 0,
                 },
                 {
                     logLength: 1,
                     numberOfEntriesSent: 0,
                     previousEntryIndex: 0,
                     expectedNextIndex: 1,
+                    expectedMatchIndex: 0,
                 },
                 {
                     logLength: 2,
                     numberOfEntriesSent: 1,
                     previousEntryIndex: -1,
                     expectedNextIndex: 1,
+                    expectedMatchIndex: 0,
                 },
                 {
                     logLength: 2,
                     numberOfEntriesSent: 1,
                     previousEntryIndex: 0,
                     expectedNextIndex: 2,
+                    expectedMatchIndex: 1,
                 },
                 {
                     logLength: 2,
                     numberOfEntriesSent: 2,
                     previousEntryIndex: -1,
                     expectedNextIndex: 2,
+                    expectedMatchIndex: 1,
                 },
             ];
 
@@ -1164,6 +1171,7 @@ describe('state', () => {
                     numberOfEntriesSent,
                     previousEntryIndex,
                     expectedNextIndex,
+                    expectedMatchIndex,
                 }) => {
                     const state = leaderState({
                         log: new Log(
@@ -1188,8 +1196,54 @@ describe('state', () => {
                         newState.type === 'leader' &&
                             newState.followerInfo[2]?.nextIndex,
                     ).toEqual(expectedNextIndex);
+                    expect(
+                        newState.type === 'leader' &&
+                            newState.followerInfo[2]?.matchIndex,
+                    ).toEqual(expectedMatchIndex);
                 },
             );
+
+            it('never decreases matchIndex', () => {
+                const state = leaderState({
+                    log: new Log(Array(3).fill({ term: 1, value: 'x <- 1' })),
+                    followerInfo: {
+                        2: {
+                            nextIndex: -1,
+                            matchIndex: 2,
+                        },
+                        1: {
+                            nextIndex: 3,
+                            matchIndex: 2,
+                        },
+                    },
+                });
+                const event: Event<string> = {
+                    type: 'receivedMessageFromNode',
+                    node: 2,
+                    message: {
+                        type: 'appendEntriesResponse',
+                        ok: true,
+                        prevLogIndexFromRequest: -1,
+                        numberOfEntriesSentInRequest: 1,
+                        term: 0,
+                    },
+                };
+
+                const newState = {
+                    ...state,
+                    followerInfo: {
+                        ...state.followerInfo,
+                        2: {
+                            nextIndex: 1,
+                            matchIndex: 2,
+                        },
+                    },
+                };
+                expect(reduce(event, state)).toEqual({
+                    newState,
+                    effects: [],
+                });
+            });
 
             it('steps down if the term of the response is higher', () => {
                 const state = leaderState({

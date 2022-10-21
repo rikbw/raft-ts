@@ -541,7 +541,7 @@ function reduceReceivedAppendEntriesResponse<LogValueType>({
                             // we should just set nextIndex to 0.
                             nextIndex: Math.max(prevLogIndexFromRequest, 0),
                             matchIndex:
-                                state.followerInfo[node]?.matchIndex ?? 0,
+                                state.followerInfo[node]?.matchIndex ?? -1,
                         },
                     },
                 };
@@ -561,13 +561,19 @@ function reduceReceivedAppendEntriesResponse<LogValueType>({
                 0,
             );
 
+            // Logic: we replicated until nextIndex - 1, but response can be outdated and we should not decrease matchIndex.
+            const matchIndex = Math.max(
+                nextIndex - 1,
+                state.followerInfo[node]?.matchIndex ?? -1,
+            );
+
             const newState: State<LogValueType> = {
                 ...state,
                 followerInfo: {
                     ...state.followerInfo,
                     [node]: {
                         nextIndex,
-                        matchIndex: state.followerInfo[node]?.matchIndex ?? 0,
+                        matchIndex,
                     },
                 },
             };
@@ -622,7 +628,7 @@ function reduceReceivedRequestVoteResponse<LogValueType>({
                         ...prev,
                         [node]: {
                             nextIndex: state.log.getEntries().length,
-                            matchIndex: 0,
+                            matchIndex: -1,
                         },
                     }),
                     {},
