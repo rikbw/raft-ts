@@ -647,9 +647,13 @@ function reduceReceivedRequestVoteResponse<LogValueType>({
             };
         }
 
+        // Ignore, either we're already leader or we're no longer expecting to get elected.
         case 'follower':
         case 'leader':
-            throw new Error('not implemented');
+            return {
+                newState: state,
+                effects: [],
+            };
 
         default:
             return unreachable(state);

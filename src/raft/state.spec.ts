@@ -461,6 +461,27 @@ describe('state', () => {
                 });
             });
         });
+
+        // Can happen when it stepped down because someone else won the vote, and other cases.
+        describe('when it receives requestVoteResponse', () => {
+            it('ignores it', () => {
+                const state = followerState();
+                const event: Event<string> = {
+                    type: 'receivedMessageFromNode',
+                    node: 2,
+                    message: {
+                        type: 'requestVoteResponse',
+                        voteGranted: true,
+                        term: 2,
+                    },
+                };
+
+                expect(reduce(event, state)).toEqual({
+                    newState: state,
+                    effects: [],
+                });
+            });
+        });
     });
 
     describe('candidate', () => {
@@ -1167,6 +1188,28 @@ describe('state', () => {
             expect(reduce(event, state)).toEqual({
                 newState,
                 effects,
+            });
+        });
+
+        describe('when it receives requestVoteResponse', () => {
+            it('ignores it, because it is already leader', () => {
+                const state = leaderState({
+                    currentTerm: 2,
+                });
+                const event: Event<string> = {
+                    type: 'receivedMessageFromNode',
+                    node: 2,
+                    message: {
+                        type: 'requestVoteResponse',
+                        voteGranted: true,
+                        term: 2,
+                    },
+                };
+
+                expect(reduce(event, state)).toEqual({
+                    newState: state,
+                    effects: [],
+                });
             });
         });
     });
