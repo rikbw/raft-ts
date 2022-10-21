@@ -12,7 +12,7 @@ import { createLogger } from 'bunyan';
 
 type Logger = ReturnType<typeof createLogger>;
 
-type IncomingMessage<LogValueType> = NodeMessage<LogValueType> & {
+export type IncomingMessage<LogValueType> = NodeMessage<LogValueType> & {
     sender: number;
 };
 
@@ -21,7 +21,7 @@ export type OutgoingMessage<LogValueType> = NodeMessage<LogValueType> & {
 };
 
 // Wrapper on top of State & reducer, to give it an easier API to work with in the rest of the application.
-// This means it should remain pure.
+// This means it should remain pure (apart from logs).
 export class RaftNode<LogValueType> {
     private state: State<LogValueType>;
 
@@ -29,8 +29,9 @@ export class RaftNode<LogValueType> {
         private readonly sendMessage: (
             message: OutgoingMessage<LogValueType>,
         ) => void,
+        private readonly resetElectionTimeout: () => void,
         private readonly logger: Logger,
-        otherClusterNodes: number[],
+        otherClusterNodes: ReadonlyArray<number>,
     ) {
         this.state = getInitialState(
             // TODO this should read the log from disk. Should probably be passed down by the caller of this constructor.
@@ -52,6 +53,7 @@ export class RaftNode<LogValueType> {
     }
 
     public leaderElectionTimeout() {
+        this.logger.debug('Leader election timeout');
         this.dispatch({
             type: 'electionTimeout',
         });
@@ -59,9 +61,9 @@ export class RaftNode<LogValueType> {
 
     public receiveMessage(message: IncomingMessage<LogValueType>) {
         const { sender, ...rest } = message;
-        // this.logger.debug('received message', {
-        //     message,
-        // });
+        this.logger.debug('received message', {
+            message,
+        });
         this.dispatch({
             type: 'receivedMessageFromNode',
             message: rest,
@@ -111,6 +113,7 @@ export class RaftNode<LogValueType> {
                 }
 
                 case 'resetElectionTimeout':
+                    this.resetElectionTimeout();
                     return;
 
                 default:

@@ -16,8 +16,12 @@ class TestEnvironment {
                 level: 'debug',
             });
             const otherNodes = allNodes.filter((id) => id != index);
+            const resetElectionTimeout = () => {
+                // noop
+            };
             return new RaftNode<string>(
                 (message) => this.sendMessage({ message, sender: index }),
+                resetElectionTimeout,
                 logger,
                 otherNodes,
             );
