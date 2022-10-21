@@ -10,8 +10,6 @@ const mainRouter = new Router();
 
 const store = new Map<string, string>();
 
-// TODO use shared io-ts types for request bodies and responses
-
 mainRouter.get('/get/:key', (context) => {
     const { key } = context.params;
     console.log('got get request', { key });
