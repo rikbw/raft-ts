@@ -119,6 +119,7 @@ describe('state', () => {
                             ok: true,
                             term: 3,
                             prevLogIndexFromRequest: -1,
+                            numberOfEntriesSentInRequest: 0,
                         },
                         node,
                     },
@@ -180,6 +181,7 @@ describe('state', () => {
                             ok: true,
                             term: 2,
                             prevLogIndexFromRequest: -1,
+                            numberOfEntriesSentInRequest: 2,
                         },
                     },
                     {
@@ -226,6 +228,7 @@ describe('state', () => {
                             ok: false,
                             prevLogIndexFromRequest: 0,
                             term: 2,
+                            numberOfEntriesSentInRequest: 0,
                         },
                     },
                     {
@@ -277,6 +280,7 @@ describe('state', () => {
                         ok: false,
                         prevLogIndexFromRequest: expect.any(Number),
                         term: 3,
+                        numberOfEntriesSentInRequest: 0,
                     },
                 },
                 {
@@ -541,6 +545,7 @@ describe('state', () => {
                         ok: true,
                         term: 2,
                         prevLogIndexFromRequest: expect.any(Number),
+                        numberOfEntriesSentInRequest: 0,
                     },
                 },
                 {
@@ -577,6 +582,7 @@ describe('state', () => {
                         ok: false,
                         term: 1,
                         prevLogIndexFromRequest: expect.any(Number),
+                        numberOfEntriesSentInRequest: 0,
                     },
                 },
             ];
@@ -591,7 +597,7 @@ describe('state', () => {
                 const state = candidateState({
                     currentTerm: 1,
                     otherClusterNodes: [1, 2],
-                    votes: new Set([1]),
+                    votes: new Set(),
                     log: new Log([{ term: 0, value: 'x <- 2' }]),
                 });
                 const event: Event<string> = {
@@ -643,7 +649,7 @@ describe('state', () => {
             it('does not count the same vote twice', () => {
                 const state = candidateState({
                     currentTerm: 1,
-                    otherClusterNodes: [1, 2],
+                    otherClusterNodes: [1, 2, 3, 4],
                     votes: new Set([1]),
                 });
 
@@ -759,7 +765,7 @@ describe('state', () => {
     });
 
     describe('leader', () => {
-        it('does not expect an election timeout', () => {
+        it('ignores leader election timeouts', () => {
             const state = leaderState({
                 currentTerm: 5,
             });
@@ -767,11 +773,10 @@ describe('state', () => {
                 type: 'electionTimeout',
             };
 
-            expect(() => {
-                reduce(event, state);
-            }).toThrowErrorMatchingInlineSnapshot(
-                '"unreachable: election timeout should not fire when you are a leader"',
-            );
+            expect(reduce(event, state)).toEqual({
+                newState: state,
+                effects: [],
+            });
         });
 
         it('sends heartbeat messages when the timer to do so expires', () => {
@@ -826,6 +831,7 @@ describe('state', () => {
                         ok: false,
                         prevLogIndexFromRequest: 1,
                         term: 2,
+                        numberOfEntriesSentInRequest: 0,
                     },
                 };
 
@@ -886,6 +892,7 @@ describe('state', () => {
                         ok: false,
                         prevLogIndexFromRequest: 0,
                         term: 2,
+                        numberOfEntriesSentInRequest: 0,
                     },
                 };
 
@@ -925,38 +932,86 @@ describe('state', () => {
             });
         });
 
-        // TODO this isn't entirely correct: this is only correct when appending zero entries.
-        // So we need to know how many entries were appended as well.
-        it('updates follower state when it receives that appendEntries is ok', () => {
-            const state = leaderState({
-                followerInfo: {
-                    2: {
-                        nextIndex: 3,
-                    },
-                },
-            });
-            const event: Event<string> = {
-                type: 'receivedMessageFromNode',
-                node: 2,
-                message: {
-                    type: 'appendEntriesResponse',
-                    ok: true,
-                    term: state.currentTerm,
-                    prevLogIndexFromRequest: 2,
-                },
+        describe('when it receives that appendEntries is ok', () => {
+            type TestCase = {
+                logLength: number;
+                numberOfEntriesSent: number;
+                previousEntryIndex: number;
+                expectedNextIndex: number;
             };
 
-            const newState = leaderState({
-                followerInfo: {
-                    2: {
-                        nextIndex: 4,
-                    },
+            const testCases: TestCase[] = [
+                {
+                    logLength: 0,
+                    numberOfEntriesSent: 0,
+                    previousEntryIndex: -1,
+                    expectedNextIndex: 0,
                 },
-            });
-            expect(reduce(event, state)).toEqual({
-                newState: newState,
-                effects: [],
-            });
+                {
+                    logLength: 1,
+                    numberOfEntriesSent: 1,
+                    previousEntryIndex: -1,
+                    expectedNextIndex: 1,
+                },
+                {
+                    logLength: 1,
+                    numberOfEntriesSent: 0,
+                    previousEntryIndex: 0,
+                    expectedNextIndex: 1,
+                },
+                {
+                    logLength: 2,
+                    numberOfEntriesSent: 1,
+                    previousEntryIndex: -1,
+                    expectedNextIndex: 1,
+                },
+                {
+                    logLength: 2,
+                    numberOfEntriesSent: 1,
+                    previousEntryIndex: 0,
+                    expectedNextIndex: 2,
+                },
+                {
+                    logLength: 2,
+                    numberOfEntriesSent: 2,
+                    previousEntryIndex: -1,
+                    expectedNextIndex: 2,
+                },
+            ];
+
+            it.each(testCases)(
+                'sets the nextIndex properly in all cases',
+                ({
+                    logLength,
+                    numberOfEntriesSent,
+                    previousEntryIndex,
+                    expectedNextIndex,
+                }) => {
+                    const state = leaderState({
+                        log: new Log(
+                            Array(logLength).fill({ term: 1, value: 'x <- 1' }),
+                        ),
+                    });
+                    const event: Event<string> = {
+                        type: 'receivedMessageFromNode',
+                        node: 2,
+                        message: {
+                            type: 'appendEntriesResponse',
+                            ok: true,
+                            term: state.currentTerm,
+                            prevLogIndexFromRequest: previousEntryIndex,
+                            numberOfEntriesSentInRequest: numberOfEntriesSent,
+                        },
+                    };
+
+                    const { newState } = reduce(event, state);
+
+                    expect(
+                        newState.type === 'leader' &&
+                            newState.followerInfo[2]?.nextIndex,
+                    ).toEqual(expectedNextIndex);
+                },
+            );
         });
 
         it.todo(

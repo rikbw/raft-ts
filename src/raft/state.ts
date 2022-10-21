@@ -8,7 +8,7 @@ type MutableState<LogValueType> =
           type: 'follower';
           currentTerm: number;
           log: Log<LogValueType>;
-          otherClusterNodes: number[];
+          otherClusterNodes: ReadonlyArray<number>;
           votedFor: number | undefined;
       }
     | {
@@ -16,14 +16,14 @@ type MutableState<LogValueType> =
           currentTerm: number;
           log: Log<LogValueType>;
           followerInfo: FollowerInfo;
-          otherClusterNodes: number[];
+          otherClusterNodes: ReadonlyArray<number>;
       }
     | {
           type: 'candidate';
           currentTerm: number;
           votes: Set<number>;
           log: Log<LogValueType>;
-          otherClusterNodes: number[];
+          otherClusterNodes: ReadonlyArray<number>;
       };
 
 export type State<LogValueType> = Readonly<MutableState<LogValueType>>;
@@ -40,7 +40,7 @@ export type CandidateState<LogValueType> = State<LogValueType> & {
 
 export function getInitialState<LogValueType>(
     log: Log<LogValueType>,
-    otherClusterNodes: number[],
+    otherClusterNodes: ReadonlyArray<number>,
 ): State<LogValueType> {
     return {
         type: 'follower',
@@ -82,6 +82,7 @@ export type NodeMessage<LogValueType> =
           type: 'appendEntriesResponse';
           ok: boolean;
           prevLogIndexFromRequest: number;
+          numberOfEntriesSentInRequest: number;
           term: number;
       }
     | {
@@ -143,9 +144,12 @@ function reduceElectionTimeout<LogValueType>(
 ): ReducerResult<LogValueType> {
     switch (state.type) {
         case 'leader':
-            throw new Error(
-                'unreachable: election timeout should not fire when you are a leader',
-            );
+            // Ignore leader election timeouts as a leader.
+            return {
+                newState: state,
+                effects: [],
+            };
+
         case 'follower':
         case 'candidate': {
             const newTerm = state.currentTerm + 1;
@@ -198,6 +202,8 @@ function reduceReceivedMessage<LogValueType>({
                 node,
                 term: message.term,
                 ok: message.ok,
+                numberOfEntriesSentInRequest:
+                    message.numberOfEntriesSentInRequest,
             });
 
         case 'appendEntries':
@@ -242,6 +248,7 @@ function reduceReceivedAppendEntries<LogValueType>({
     previousEntryIdentifier: EntryIdentifier | undefined;
     entries: Entry<LogValueType>[];
 }): ReducerResult<LogValueType> {
+    const numberOfEntriesSentInRequest = entries.length;
     switch (state.type) {
         case 'follower': {
             const resetElectionTimeoutEffect: Effect<LogValueType> = {
@@ -260,6 +267,7 @@ function reduceReceivedAppendEntries<LogValueType>({
                                 term: state.currentTerm,
                                 // Doesn't matter, the receiver will step down as a leader.
                                 prevLogIndexFromRequest: 0,
+                                numberOfEntriesSentInRequest,
                                 ok: false,
                             },
                         },
@@ -295,6 +303,7 @@ function reduceReceivedAppendEntries<LogValueType>({
                             message: {
                                 type: 'appendEntriesResponse',
                                 prevLogIndexFromRequest,
+                                numberOfEntriesSentInRequest,
                                 term,
                                 ok: false,
                             },
@@ -314,6 +323,7 @@ function reduceReceivedAppendEntries<LogValueType>({
                             ok: true,
                             term: newState.currentTerm,
                             prevLogIndexFromRequest,
+                            numberOfEntriesSentInRequest,
                         },
                         node,
                     },
@@ -346,6 +356,7 @@ function reduceReceivedAppendEntries<LogValueType>({
                                 ok: true,
                                 term,
                                 prevLogIndexFromRequest,
+                                numberOfEntriesSentInRequest,
                             },
                         },
                         {
@@ -367,6 +378,7 @@ function reduceReceivedAppendEntries<LogValueType>({
                             term: state.currentTerm,
                             // Does not matter, the sender will step down as a leader
                             prevLogIndexFromRequest: 0,
+                            numberOfEntriesSentInRequest,
                         },
                     },
                 ],
@@ -461,12 +473,14 @@ function reduceReceivedAppendEntriesResponse<LogValueType>({
     term,
     node,
     ok,
+    numberOfEntriesSentInRequest,
 }: {
     state: State<LogValueType>;
     prevLogIndexFromRequest: number;
     term: number;
     node: number;
     ok: boolean;
+    numberOfEntriesSentInRequest: number;
 }): ReducerResult<LogValueType> {
     switch (state.type) {
         case 'leader': {
@@ -489,10 +503,11 @@ function reduceReceivedAppendEntriesResponse<LogValueType>({
                     followerInfo: {
                         ...state.followerInfo,
                         [node]: {
-                            nextIndex: Math.max(
-                                prevLogIndexFromRequest,
-                                (state.followerInfo[node]?.nextIndex ?? 0) - 1,
-                            ),
+                            // nextIndex should become prevLogIndexFromRequest, because the index we used before that was
+                            // prevLogIndexFromRequest + 1. We should go one down, so prevLogIndexFromRequest + 1 - 1.
+                            // edge case: if prevLogIndexFromRequest === -1, which can happen if the log is empty,
+                            // we should just set nextIndex to 0.
+                            nextIndex: Math.max(prevLogIndexFromRequest, 0),
                         },
                     },
                 };
@@ -520,12 +535,19 @@ function reduceReceivedAppendEntriesResponse<LogValueType>({
                 };
             }
 
+            // Logic: response was ok, and we successfully appended numberOfEntriesSentInRequest entries starting from
+            // prevLogIndexFromRequest + 1, so next index should be the sum of those.
+            const nextIndex = Math.max(
+                prevLogIndexFromRequest + 1 + numberOfEntriesSentInRequest,
+                0,
+            );
+
             const newState: State<LogValueType> = {
                 ...state,
                 followerInfo: {
                     ...state.followerInfo,
                     [node]: {
-                        nextIndex: prevLogIndexFromRequest + 2,
+                        nextIndex,
                     },
                 },
             };
@@ -574,7 +596,7 @@ function reduceReceivedRequestVoteResponse<LogValueType>({
 
             const votes = voteGranted ? state.votes.add(node) : state.votes;
 
-            if (votes.size > state.otherClusterNodes.length / 2) {
+            if (votes.size + 1 > state.otherClusterNodes.length / 2) {
                 const nextIndex = state.log.getEntries().length;
 
                 const appendEntriesMessage: NodeMessage<LogValueType> = {
