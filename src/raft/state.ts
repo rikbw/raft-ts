@@ -1,5 +1,6 @@
 import { unreachable } from '../util/unreachable';
 import { Entry, EntryIdentifier, Log } from './log';
+import { commitIndexFromState } from './commitIndex';
 
 type FollowerInfo = Record<number, { nextIndex: number; matchIndex: number }>;
 
@@ -576,7 +577,7 @@ function reduceReceivedAppendEntriesResponse<LogValueType>({
                 state.followerInfo[node]?.matchIndex ?? -1,
             );
 
-            const newState: State<LogValueType> = {
+            const updatedState = {
                 ...state,
                 followerInfo: {
                     ...state.followerInfo,
@@ -586,6 +587,14 @@ function reduceReceivedAppendEntriesResponse<LogValueType>({
                     },
                 },
             };
+
+            const commitIndex = commitIndexFromState(updatedState);
+
+            const newState = {
+                ...updatedState,
+                commitIndex,
+            };
+
             return {
                 newState,
                 effects: [],

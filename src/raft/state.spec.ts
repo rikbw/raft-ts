@@ -1275,6 +1275,60 @@ describe('state', () => {
                     effects: [],
                 });
             });
+
+            it('updates commitIndex if necessary', () => {
+                const state = leaderState({
+                    currentTerm: 1,
+                    log: new Log([
+                        {
+                            term: 0,
+                            value: 'x <- 2',
+                        },
+                        {
+                            term: 1,
+                            value: 'y <- 3',
+                        },
+                    ]),
+                    commitIndex: -1,
+                    followerInfo: {
+                        1: {
+                            nextIndex: -1,
+                            matchIndex: -1,
+                        },
+                        2: {
+                            nextIndex: -1,
+                            matchIndex: -1,
+                        },
+                    },
+                });
+                const event: Event<string> = {
+                    type: 'receivedMessageFromNode',
+                    node: 1,
+                    message: {
+                        type: 'appendEntriesResponse',
+                        ok: true,
+                        numberOfEntriesSentInRequest: 2,
+                        prevLogIndexFromRequest: -1,
+                        term: 1,
+                    },
+                };
+
+                const newState = leaderState({
+                    ...state,
+                    followerInfo: {
+                        ...state.followerInfo,
+                        1: {
+                            nextIndex: 2,
+                            matchIndex: 1,
+                        },
+                    },
+                    commitIndex: 1,
+                });
+                expect(reduce(event, state)).toEqual({
+                    newState,
+                    effects: [],
+                });
+            });
         });
 
         it('transitions to follower if it receives an appendEntries of higher term', () => {
