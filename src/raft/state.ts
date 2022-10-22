@@ -358,6 +358,8 @@ function reduceReceivedAppendEntries<LogValueType>({
                     log: state.log,
                     currentTerm: term,
                     otherClusterNodes: state.otherClusterNodes,
+                    // This can be undefined, because we didn't vote for anyone else than this node in this term.
+                    // So there cannot be two leaders at once for this term.
                     votedFor: undefined,
                     commitIndex: state.commitIndex,
                 };
