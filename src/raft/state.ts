@@ -290,13 +290,15 @@ function reduceReceivedAppendEntries<LogValueType>({
                 entries,
             });
 
+            const votedFor =
+                term > state.currentTerm ? undefined : state.votedFor;
+
             const newState: State<LogValueType> = {
                 type: 'follower',
                 currentTerm: term,
                 log: state.log,
                 otherClusterNodes: state.otherClusterNodes,
-                // TODO this should not be reset to undefined, only if the term increases.
-                votedFor: undefined,
+                votedFor,
                 commitIndex: state.commitIndex,
             };
 

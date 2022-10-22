@@ -115,6 +115,7 @@ describe('state', () => {
             it('updates its term and acknowledges the receival', () => {
                 const state = followerState({
                     currentTerm: 2,
+                    votedFor: 3,
                 });
                 const node = 1;
                 const event: Event<string> = {
@@ -130,6 +131,7 @@ describe('state', () => {
 
                 const newState = followerState({
                     currentTerm: 3,
+                    votedFor: undefined,
                 });
                 const effects: Effect<string>[] = [
                     {
@@ -261,6 +263,44 @@ describe('state', () => {
                 };
                 expect(reduce(event, state)).toEqual({
                     newState,
+                    effects,
+                });
+            });
+
+            it('keeps votedFor if the term is the same', () => {
+                const state = followerState({
+                    currentTerm: 2,
+                    votedFor: 3,
+                });
+                const event: Event<string> = {
+                    type: 'receivedMessageFromNode',
+                    node: 1,
+                    message: {
+                        type: 'appendEntries',
+                        term: 2,
+                        entries: [],
+                        previousEntryIdentifier: undefined,
+                    },
+                };
+
+                const effects: Array<Effect<string>> = [
+                    {
+                        type: 'sendMessageToNode',
+                        node: 1,
+                        message: {
+                            type: 'appendEntriesResponse',
+                            ok: true,
+                            term: 2,
+                            prevLogIndexFromRequest: -1,
+                            numberOfEntriesSentInRequest: 0,
+                        },
+                    },
+                    {
+                        type: 'resetElectionTimeout',
+                    },
+                ];
+                expect(reduce(event, state)).toEqual({
+                    newState: state,
                     effects,
                 });
             });
