@@ -257,6 +257,8 @@ function reduceReceivedAppendEntries<LogValueType>({
     entries: Entry<LogValueType>[];
 }): ReducerResult<LogValueType> {
     const numberOfEntriesSentInRequest = entries.length;
+    const prevLogIndexFromRequest = previousEntryIdentifier?.index ?? -1;
+
     switch (state.type) {
         case 'follower': {
             const resetElectionTimeoutEffect: Effect<LogValueType> = {
@@ -273,8 +275,7 @@ function reduceReceivedAppendEntries<LogValueType>({
                             message: {
                                 type: 'appendEntriesResponse',
                                 term: state.currentTerm,
-                                // Doesn't matter, the receiver will step down as a leader.
-                                prevLogIndexFromRequest: 0,
+                                prevLogIndexFromRequest,
                                 numberOfEntriesSentInRequest,
                                 ok: false,
                             },
@@ -301,9 +302,6 @@ function reduceReceivedAppendEntries<LogValueType>({
                 votedFor,
                 commitIndex: state.commitIndex,
             };
-
-            const prevLogIndexFromRequest =
-                previousEntryIdentifier?.index ?? -1;
 
             if (!ok) {
                 return {
@@ -398,8 +396,7 @@ function reduceReceivedAppendEntries<LogValueType>({
                             type: 'appendEntriesResponse',
                             ok: false,
                             term: state.currentTerm,
-                            // Does not matter, the sender will step down as a leader
-                            prevLogIndexFromRequest: 0,
+                            prevLogIndexFromRequest,
                             numberOfEntriesSentInRequest,
                         },
                     },
@@ -429,8 +426,19 @@ function reduceReceivedAppendEntries<LogValueType>({
 
             return {
                 newState: state,
-                // TODO we should send false here, with updated term
-                effects: [],
+                effects: [
+                    {
+                        type: 'sendMessageToNode',
+                        node,
+                        message: {
+                            type: 'appendEntriesResponse',
+                            ok: false,
+                            prevLogIndexFromRequest,
+                            numberOfEntriesSentInRequest,
+                            term: state.currentTerm,
+                        },
+                    },
+                ],
             };
 
         default:

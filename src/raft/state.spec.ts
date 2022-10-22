@@ -1428,7 +1428,7 @@ describe('state', () => {
             );
         });
 
-        it('ignores the message if receives an appendEntries with a lower term', () => {
+        it('replies false if receives an appendEntries with a lower term', () => {
             // It will send a heartbeat soon anyway. An optimization would be to immediately send appendEntries.
             const state = leaderState({
                 currentTerm: 1,
@@ -1444,9 +1444,22 @@ describe('state', () => {
                 },
             };
 
+            const effects: Array<Effect<string>> = [
+                {
+                    type: 'sendMessageToNode',
+                    node: 1,
+                    message: {
+                        type: 'appendEntriesResponse',
+                        ok: false,
+                        term: 1,
+                        numberOfEntriesSentInRequest: 0,
+                        prevLogIndexFromRequest: -1,
+                    },
+                },
+            ];
             expect(reduce(event, state)).toEqual({
                 newState: state,
-                effects: [],
+                effects,
             });
         });
 
