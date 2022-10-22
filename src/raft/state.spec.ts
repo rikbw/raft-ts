@@ -670,7 +670,7 @@ describe('state', () => {
             });
         });
 
-        it('transitions to follower if it receives an appendEntries of equal or higher term', () => {
+        it('transitions to follower and appends entries if it receives an appendEntries of equal or higher term', () => {
             const state = candidateState({
                 currentTerm: 2,
             });
@@ -681,12 +681,23 @@ describe('state', () => {
                     type: 'appendEntries',
                     previousEntryIdentifier: undefined,
                     term: 2,
-                    entries: [],
+                    entries: [
+                        {
+                            term: 2,
+                            value: 'x <- 1',
+                        },
+                    ],
                 },
             };
 
             const newState = followerState({
                 currentTerm: 2,
+                log: new Log([
+                    {
+                        term: 2,
+                        value: 'x <- 1',
+                    },
+                ]),
             });
             const effects: Array<Effect<string>> = [
                 {
@@ -696,8 +707,8 @@ describe('state', () => {
                         type: 'appendEntriesResponse',
                         ok: true,
                         term: 2,
-                        prevLogIndexFromRequest: expect.any(Number),
-                        numberOfEntriesSentInRequest: 0,
+                        prevLogIndexFromRequest: -1,
+                        numberOfEntriesSentInRequest: 1,
                     },
                 },
                 {

@@ -295,6 +295,7 @@ function reduceReceivedAppendEntries<LogValueType>({
                 currentTerm: term,
                 log: state.log,
                 otherClusterNodes: state.otherClusterNodes,
+                // TODO this should not be reset to undefined, only if the term increases.
                 votedFor: undefined,
                 commitIndex: state.commitIndex,
             };
@@ -343,6 +344,13 @@ function reduceReceivedAppendEntries<LogValueType>({
 
         case 'candidate':
             if (term >= state.currentTerm) {
+                const previousEntryIdentifier =
+                    lastEntryIdentifierFromState(state);
+                const ok = state.log.appendEntries({
+                    previousEntryIdentifier,
+                    entries,
+                });
+
                 const newState: State<LogValueType> = {
                     type: 'follower',
                     log: state.log,
@@ -363,7 +371,7 @@ function reduceReceivedAppendEntries<LogValueType>({
                             node,
                             message: {
                                 type: 'appendEntriesResponse',
-                                ok: true,
+                                ok,
                                 term,
                                 prevLogIndexFromRequest,
                                 numberOfEntriesSentInRequest,
@@ -417,6 +425,7 @@ function reduceReceivedAppendEntries<LogValueType>({
 
             return {
                 newState: state,
+                // TODO we should send false here, with updated term
                 effects: [],
             };
 
