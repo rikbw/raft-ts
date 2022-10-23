@@ -112,15 +112,9 @@ describe('RaftNode', () => {
         environment.nodes[0]!.appendToLog('y <- 2');
 
         // Node 0 and 1 have the log, node 2 has nothing.
-        expect(
-            environment.nodes[0]!.__stateForTests.log.getEntries().length,
-        ).toEqual(2);
-        expect(
-            environment.nodes[1]!.__stateForTests.log.getEntries().length,
-        ).toEqual(2);
-        expect(
-            environment.nodes[2]!.__stateForTests.log.getEntries().length,
-        ).toEqual(0);
+        expect(environment.nodes[0]!.__stateForTests.log.length).toEqual(2);
+        expect(environment.nodes[1]!.__stateForTests.log.length).toEqual(2);
+        expect(environment.nodes[2]!.__stateForTests.log.length).toEqual(0);
 
         environment.connect(2);
 

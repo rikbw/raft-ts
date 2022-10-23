@@ -1,3 +1,5 @@
+import Immutable, { ImmutableArray } from 'seamless-immutable';
+
 export type EntryIdentifier = {
     index: number;
     term: number;
@@ -9,10 +11,16 @@ export type Entry<ValueType> = {
 };
 
 export class Log<ValueType> {
-    private entries: Entry<ValueType>[];
+    private readonly entries: ImmutableArray<Entry<ValueType>>;
 
-    public constructor(initialEntries: Entry<ValueType>[]) {
-        this.entries = [...initialEntries];
+    public constructor(
+        initialEntries:
+            | Array<Entry<ValueType>>
+            | ImmutableArray<Entry<ValueType>>,
+    ) {
+        this.entries = Immutable.isImmutable(initialEntries)
+            ? initialEntries
+            : Immutable(initialEntries);
     }
 
     // Returns the index of entries the previousEntryIdentifier refers to.
@@ -61,14 +69,17 @@ export class Log<ValueType> {
     }: {
         previousEntryIdentifier: EntryIdentifier | undefined;
         entries: Entry<ValueType>[];
-    }): boolean {
+    }) {
         const index = this.entriesIndexFromPreviousEntryIdentifier(
             previousEntryIdentifier,
         );
 
         // The entry identifier is not valid.
         if (index == null) {
-            return false;
+            return {
+                ok: false,
+                newLog: this,
+            };
         }
 
         if (
@@ -77,16 +88,26 @@ export class Log<ValueType> {
                 index,
             })
         ) {
-            return true;
+            return {
+                ok: true,
+                newLog: this,
+            };
         }
 
         // There's a conflict, so we have to truncate.
-        this.entries = [...this.entries.slice(0, index), ...entries];
+        const newEntries = this.entries.slice(0, index).concat(entries);
 
-        return true;
+        return {
+            ok: true,
+            newLog: new Log(newEntries),
+        };
     }
 
-    public getEntries(): ReadonlyArray<Entry<ValueType>> {
+    public getEntries(): ImmutableArray<Entry<ValueType>> {
         return this.entries;
+    }
+
+    public get length() {
+        return this.entries.length;
     }
 }

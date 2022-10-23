@@ -8,7 +8,7 @@ export function commitIndexFromState<T>(state: LeaderState<T>) {
         currentTerm,
         commitIndex: currentCommitIndex,
     } = state;
-    const logSize = log.getEntries().length;
+    const logSize = log.length;
     const otherNodesMatchIndex = Object.values(followerInfo).map(
         ({ matchIndex }) => matchIndex,
     );
@@ -16,7 +16,7 @@ export function commitIndexFromState<T>(state: LeaderState<T>) {
     matchIndex.sort();
     const potentialCommitIndex =
         matchIndex[Math.floor((matchIndex.length - 1) / 2)];
-    
+
     if (potentialCommitIndex === -1) {
         return currentCommitIndex;
     }

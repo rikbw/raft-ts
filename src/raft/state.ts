@@ -1,6 +1,7 @@
 import { unreachable } from '../util/unreachable';
 import { Entry, EntryIdentifier, Log } from './log';
 import { commitIndexFromState } from './commitIndex';
+import Immutable from 'seamless-immutable';
 
 type FollowerInfo = Record<number, { nextIndex: number; matchIndex: number }>;
 
@@ -285,8 +286,7 @@ function reduceReceivedAppendEntries<LogValueType>({
                 };
             }
 
-            // TODO make this return the new log instead of mutating it, that doesn't fit with the rest of the app
-            const ok = state.log.appendEntries({
+            const { ok, newLog } = state.log.appendEntries({
                 previousEntryIdentifier,
                 entries,
             });
@@ -297,7 +297,7 @@ function reduceReceivedAppendEntries<LogValueType>({
             const newState: State<LogValueType> = {
                 type: 'follower',
                 currentTerm: term,
-                log: state.log,
+                log: newLog,
                 otherClusterNodes: state.otherClusterNodes,
                 votedFor,
                 commitIndex: state.commitIndex,
@@ -346,14 +346,15 @@ function reduceReceivedAppendEntries<LogValueType>({
             if (term >= state.currentTerm) {
                 const previousEntryIdentifier =
                     lastEntryIdentifierFromState(state);
-                const ok = state.log.appendEntries({
+
+                const { ok, newLog } = state.log.appendEntries({
                     previousEntryIdentifier,
                     entries,
                 });
 
                 const newState: State<LogValueType> = {
                     type: 'follower',
-                    log: state.log,
+                    log: newLog,
                     currentTerm: term,
                     otherClusterNodes: state.otherClusterNodes,
                     // This can be undefined, because we didn't vote for anyone else than this node in this term.
@@ -452,7 +453,7 @@ function nextIndexForNode<LogValueType>(
 ): number {
     const { followerInfo, log } = state;
     const nodeInfo = followerInfo[node];
-    const nextIndex = nodeInfo?.nextIndex ?? log.getEntries().length;
+    const nextIndex = nodeInfo?.nextIndex ?? log.length;
 
     if (nextIndex < 0) {
         throw new Error('unexpected error: nextIndex is smaller than zero');
@@ -499,7 +500,7 @@ function sendAppendEntriesEffect<LogValueType>({
                 state.log,
                 nextIndex,
             ),
-            entries,
+            entries: Immutable.asMutable(entries),
         },
         node,
     };
@@ -667,7 +668,7 @@ function reduceReceivedRequestVoteResponse<LogValueType>({
                     (prev: FollowerInfo, node) => ({
                         ...prev,
                         [node]: {
-                            nextIndex: state.log.getEntries().length,
+                            nextIndex: state.log.length,
                             matchIndex: -1,
                         },
                     }),
@@ -824,7 +825,7 @@ function reduceClientAppendToLog<LogValueType>(
 
     const previousEntryIdentifier = lastEntryIdentifierFromState(state);
 
-    const ok = state.log.appendEntries({
+    const { ok, newLog } = state.log.appendEntries({
         previousEntryIdentifier,
         entries: [
             {
@@ -838,13 +839,18 @@ function reduceClientAppendToLog<LogValueType>(
         throw new Error('unexpected error: failed to append to leader log');
     }
 
-    const effects = state.otherClusterNodes.map(
+    const newState = {
+        ...state,
+        log: newLog,
+    };
+
+    const effects = newState.otherClusterNodes.map(
         (node): Effect<LogValueType> =>
-            sendAppendEntriesEffect({ state, node }),
+            sendAppendEntriesEffect({ state: newState, node }),
     );
 
     return {
-        newState: state,
+        newState,
         effects,
     };
 }
@@ -852,8 +858,5 @@ function reduceClientAppendToLog<LogValueType>(
 function lastEntryIdentifierFromState<LogValueType>(
     state: State<LogValueType>,
 ) {
-    return previousEntryIdentifierFromNextIndex(
-        state.log,
-        state.log.getEntries().length,
-    );
+    return previousEntryIdentifierFromNextIndex(state.log, state.log.length);
 }
