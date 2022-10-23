@@ -53,7 +53,7 @@ export function getInitialState<LogValueType>(
         log,
         otherClusterNodes,
         votedFor: undefined,
-        commitIndex: 0,
+        commitIndex: -1,
     };
 }
 
@@ -83,6 +83,7 @@ export type NodeMessage<LogValueType> =
           previousEntryIdentifier: EntryIdentifier | undefined;
           term: number;
           entries: Array<Entry<LogValueType>>;
+          leaderCommit: number;
       }
     | {
           type: 'appendEntriesResponse';
@@ -221,6 +222,7 @@ function reduceReceivedMessage<LogValueType>({
                 node,
                 previousEntryIdentifier: message.previousEntryIdentifier,
                 term: message.term,
+                leaderCommit: message.leaderCommit,
             });
 
         case 'requestVoteResponse':
@@ -244,18 +246,37 @@ function reduceReceivedMessage<LogValueType>({
     }
 }
 
+const commitIndexAfterReceivingAppendEntries = ({
+    currentCommitIndex,
+    leaderCommit,
+    logLength,
+    appendEntriesOk,
+}: {
+    currentCommitIndex: number;
+    leaderCommit: number;
+    logLength: number;
+    appendEntriesOk: boolean;
+}) => {
+    if (!appendEntriesOk) {
+        return currentCommitIndex;
+    }
+    return Math.max(currentCommitIndex, Math.min(leaderCommit, logLength - 1));
+};
+
 function reduceReceivedAppendEntries<LogValueType>({
     state,
     term,
     node,
     previousEntryIdentifier,
     entries,
+    leaderCommit,
 }: {
     state: State<LogValueType>;
     term: number;
     node: number;
     previousEntryIdentifier: EntryIdentifier | undefined;
     entries: Entry<LogValueType>[];
+    leaderCommit: number;
 }): ReducerResult<LogValueType> {
     const numberOfEntriesSentInRequest = entries.length;
     const prevLogIndexFromRequest = previousEntryIdentifier?.index ?? -1;
@@ -294,13 +315,20 @@ function reduceReceivedAppendEntries<LogValueType>({
             const votedFor =
                 term > state.currentTerm ? undefined : state.votedFor;
 
+            const commitIndex = commitIndexAfterReceivingAppendEntries({
+                currentCommitIndex: state.commitIndex,
+                leaderCommit,
+                logLength: newLog.length,
+                appendEntriesOk: ok,
+            });
+
             const newState: State<LogValueType> = {
                 type: 'follower',
                 currentTerm: term,
                 log: newLog,
                 otherClusterNodes: state.otherClusterNodes,
                 votedFor,
-                commitIndex: state.commitIndex,
+                commitIndex,
             };
 
             if (!ok) {
@@ -352,6 +380,13 @@ function reduceReceivedAppendEntries<LogValueType>({
                     entries,
                 });
 
+                const commitIndex = commitIndexAfterReceivingAppendEntries({
+                    currentCommitIndex: state.commitIndex,
+                    leaderCommit,
+                    logLength: newLog.length,
+                    appendEntriesOk: ok,
+                });
+
                 const newState: State<LogValueType> = {
                     type: 'follower',
                     log: newLog,
@@ -360,7 +395,7 @@ function reduceReceivedAppendEntries<LogValueType>({
                     // This can be undefined, because we didn't vote for anyone else than this node in this term.
                     // So there cannot be two leaders at once for this term.
                     votedFor: undefined,
-                    commitIndex: state.commitIndex,
+                    commitIndex,
                 };
 
                 const prevLogIndexFromRequest =
@@ -501,6 +536,7 @@ function sendAppendEntriesEffect<LogValueType>({
                 nextIndex,
             ),
             entries: Immutable.asMutable(entries),
+            leaderCommit: state.commitIndex,
         },
         node,
     };

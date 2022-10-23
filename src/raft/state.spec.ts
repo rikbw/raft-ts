@@ -14,7 +14,7 @@ const followerState = ({
     log = new Log([]),
     otherClusterNodes = [],
     votedFor = undefined,
-    commitIndex = 0,
+    commitIndex = -1,
 }: Partial<FollowerState<string>> = {}): FollowerState<string> => ({
     type: 'follower',
     currentTerm,
@@ -29,7 +29,7 @@ const candidateState = ({
     log = new Log([]),
     otherClusterNodes = [],
     votes = new Set(),
-    commitIndex = 0,
+    commitIndex = -1,
 }: Partial<CandidateState<string>> = {}): CandidateState<string> => ({
     type: 'candidate',
     currentTerm,
@@ -44,7 +44,7 @@ const leaderState = ({
     log = new Log([]),
     followerInfo = {},
     otherClusterNodes = [],
-    commitIndex = 0,
+    commitIndex = -1,
 }: Partial<LeaderState<string>> = {}): LeaderState<string> => ({
     type: 'leader',
     currentTerm,
@@ -126,6 +126,7 @@ describe('state', () => {
                         term: 3,
                         entries: [],
                         previousEntryIdentifier: undefined,
+                        leaderCommit: -1,
                     },
                 };
 
@@ -178,6 +179,7 @@ describe('state', () => {
                                 value: 'x <- 4',
                             },
                         ],
+                        leaderCommit: -1,
                     },
                 };
 
@@ -238,6 +240,7 @@ describe('state', () => {
                             index: 0,
                         },
                         entries: [],
+                        leaderCommit: -1,
                     },
                 };
 
@@ -280,6 +283,7 @@ describe('state', () => {
                         term: 2,
                         entries: [],
                         previousEntryIdentifier: undefined,
+                        leaderCommit: -1,
                     },
                 };
 
@@ -301,6 +305,190 @@ describe('state', () => {
                 ];
                 expect(reduce(event, state)).toEqual({
                     newState: state,
+                    effects,
+                });
+            });
+
+            it('updates commitIndex', () => {
+                const state = followerState({
+                    commitIndex: 1,
+                    log: new Log([
+                        {
+                            term: 0,
+                            value: 'x <- 1',
+                        },
+                        {
+                            term: 0,
+                            value: 'y <- 1',
+                        },
+                    ]),
+                });
+                const event: Event<string> = {
+                    type: 'receivedMessageFromNode',
+                    node: 0,
+                    message: {
+                        type: 'appendEntries',
+                        term: 0,
+                        entries: [
+                            {
+                                term: 0,
+                                value: 'z <- 1',
+                            },
+                        ],
+                        leaderCommit: 2,
+                        previousEntryIdentifier: {
+                            term: 0,
+                            index: 1,
+                        },
+                    },
+                };
+
+                const newState = followerState({
+                    commitIndex: 2,
+                    log: new Log([
+                        {
+                            term: 0,
+                            value: 'x <- 1',
+                        },
+                        {
+                            term: 0,
+                            value: 'y <- 1',
+                        },
+                        {
+                            term: 0,
+                            value: 'z <- 1',
+                        },
+                    ]),
+                });
+                const effects: Array<Effect<string>> = [
+                    {
+                        type: 'sendMessageToNode',
+                        node: 0,
+                        message: {
+                            type: 'appendEntriesResponse',
+                            ok: true,
+                            numberOfEntriesSentInRequest: 1,
+                            prevLogIndexFromRequest: 1,
+                            term: 0,
+                        },
+                    },
+                    {
+                        type: 'resetElectionTimeout',
+                    },
+                ];
+                expect(reduce(event, state)).toEqual({
+                    newState,
+                    effects,
+                });
+            });
+
+            it('sets commitIndex no higher than the length of the log', () => {
+                const state = followerState({
+                    commitIndex: -1,
+                    log: new Log([]),
+                });
+                const event: Event<string> = {
+                    type: 'receivedMessageFromNode',
+                    node: 0,
+                    message: {
+                        type: 'appendEntries',
+                        term: 0,
+                        entries: [
+                            {
+                                term: 0,
+                                value: 'x <- 1',
+                            },
+                        ],
+                        leaderCommit: 2,
+                        previousEntryIdentifier: undefined,
+                    },
+                };
+
+                const newState = followerState({
+                    commitIndex: 0,
+                    log: new Log([
+                        {
+                            term: 0,
+                            value: 'x <- 1',
+                        },
+                    ]),
+                });
+                const effects: Array<Effect<string>> = [
+                    {
+                        type: 'sendMessageToNode',
+                        node: 0,
+                        message: {
+                            type: 'appendEntriesResponse',
+                            ok: true,
+                            numberOfEntriesSentInRequest: 1,
+                            prevLogIndexFromRequest: -1,
+                            term: 0,
+                        },
+                    },
+                    {
+                        type: 'resetElectionTimeout',
+                    },
+                ];
+                expect(reduce(event, state)).toEqual({
+                    newState,
+                    effects,
+                });
+            });
+
+            it('does not decrease commitIndex', () => {
+                const state = followerState({
+                    commitIndex: 0,
+                    log: new Log([
+                        {
+                            term: 0,
+                            value: 'x <- 1',
+                        },
+                    ]),
+                });
+                const event: Event<string> = {
+                    type: 'receivedMessageFromNode',
+                    node: 0,
+                    message: {
+                        type: 'appendEntries',
+                        term: 0,
+                        entries: [
+                            {
+                                term: 0,
+                                value: 'x <- 1',
+                            },
+                        ],
+                        leaderCommit: -1,
+                        previousEntryIdentifier: undefined,
+                    },
+                };
+
+                const newState = followerState({
+                    commitIndex: 0,
+                    log: new Log([
+                        {
+                            term: 0,
+                            value: 'x <- 1',
+                        },
+                    ]),
+                });
+                const effects: Array<Effect<string>> = [
+                    {
+                        type: 'sendMessageToNode',
+                        node: 0,
+                        message: {
+                            type: 'appendEntriesResponse',
+                            ok: true,
+                            numberOfEntriesSentInRequest: 1,
+                            prevLogIndexFromRequest: -1,
+                            term: 0,
+                        },
+                    },
+                    {
+                        type: 'resetElectionTimeout',
+                    },
+                ];
+                expect(reduce(event, state)).toEqual({
+                    newState,
                     effects,
                 });
             });
@@ -331,6 +519,7 @@ describe('state', () => {
                     previousEntryIdentifier: undefined,
                     term: 2,
                     entries: [],
+                    leaderCommit: -1,
                 },
             };
 
@@ -727,6 +916,7 @@ describe('state', () => {
                             value: 'x <- 1',
                         },
                     ],
+                    leaderCommit: -1,
                 },
             };
 
@@ -773,6 +963,7 @@ describe('state', () => {
                     term: 0,
                     previousEntryIdentifier: undefined,
                     entries: [],
+                    leaderCommit: 1,
                 },
             };
 
@@ -795,6 +986,41 @@ describe('state', () => {
             });
         });
 
+        it('updates commitIndex if it receives an appendEntries', () => {
+            const state = candidateState({
+                currentTerm: 1,
+                commitIndex: -1,
+            });
+            const event: Event<string> = {
+                type: 'receivedMessageFromNode',
+                node: 0,
+                message: {
+                    type: 'appendEntries',
+                    leaderCommit: 0,
+                    entries: [
+                        {
+                            term: 1,
+                            value: 'x <- 1',
+                        },
+                    ],
+                    term: 1,
+                    previousEntryIdentifier: undefined,
+                },
+            };
+
+            const newState = followerState({
+                currentTerm: 1,
+                log: new Log([
+                    {
+                        term: 1,
+                        value: 'x <- 1',
+                    },
+                ]),
+                commitIndex: 0,
+            });
+            expect(reduce(event, state).newState).toEqual(newState);
+        });
+
         describe('when it receives request vote response', () => {
             it('becomes leader when it receives a majority of the votes', () => {
                 const state = candidateState({
@@ -802,6 +1028,7 @@ describe('state', () => {
                     otherClusterNodes: [1, 2],
                     votes: new Set(),
                     log: new Log([{ term: 0, value: 'x <- 2' }]),
+                    commitIndex: 0,
                 });
                 const event: Event<string> = {
                     type: 'receivedMessageFromNode',
@@ -821,6 +1048,7 @@ describe('state', () => {
                         2: { nextIndex: 1, matchIndex: -1 },
                     },
                     log: state.log,
+                    commitIndex: state.commitIndex,
                 });
                 const message: NodeMessage<string> = {
                     type: 'appendEntries',
@@ -830,6 +1058,7 @@ describe('state', () => {
                         term: 0,
                         index: 0,
                     },
+                    leaderCommit: 0,
                 };
                 const effects: Array<Effect<string>> = [
                     {
@@ -990,6 +1219,7 @@ describe('state', () => {
         it('sends heartbeat messages when the timer to do so expires', () => {
             const state = leaderState({
                 currentTerm: 2,
+                commitIndex: 3,
             });
             const node = 2;
             const event: Event<string> = {
@@ -1006,6 +1236,7 @@ describe('state', () => {
                         term: 2,
                         previousEntryIdentifier: undefined,
                         entries: [],
+                        leaderCommit: 3,
                     },
                 },
             ];
@@ -1029,6 +1260,7 @@ describe('state', () => {
                             term: 2,
                         },
                     ]),
+                    commitIndex: 0,
                 });
                 const node = 4;
                 const event: Event<string> = {
@@ -1069,6 +1301,7 @@ describe('state', () => {
                                     term: 2,
                                 },
                             ],
+                            leaderCommit: 0,
                         },
                     },
                 ];
@@ -1132,6 +1365,7 @@ describe('state', () => {
                                     term: 2,
                                 },
                             ],
+                            leaderCommit: -1,
                         },
                     },
                 ];
@@ -1394,6 +1628,7 @@ describe('state', () => {
                     term: 2,
                     entries: [],
                     previousEntryIdentifier: undefined,
+                    leaderCommit: 3,
                 },
             };
 
@@ -1418,6 +1653,7 @@ describe('state', () => {
                     term: 1,
                     entries: [],
                     previousEntryIdentifier: undefined,
+                    leaderCommit: -1,
                 },
             };
 
@@ -1441,6 +1677,7 @@ describe('state', () => {
                     term: 0,
                     entries: [],
                     previousEntryIdentifier: undefined,
+                    leaderCommit: -1,
                 },
             };
 
@@ -1545,6 +1782,7 @@ describe('state', () => {
                     0: { nextIndex: 1, matchIndex: 0 },
                     2: { nextIndex: 0, matchIndex: 0 },
                 },
+                commitIndex: 0,
             });
             const event: Event<string> = {
                 type: 'clientAppendToLog',
@@ -1581,6 +1819,7 @@ describe('state', () => {
                             term: 1,
                             index: 0,
                         },
+                        leaderCommit: 0,
                     },
                 },
                 {
@@ -1600,6 +1839,7 @@ describe('state', () => {
                             },
                         ],
                         previousEntryIdentifier: undefined,
+                        leaderCommit: 0,
                     },
                 },
             ];
