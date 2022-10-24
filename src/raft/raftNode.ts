@@ -6,7 +6,7 @@ import {
     Effect,
     NodeMessage,
 } from './state';
-import { Log } from './log';
+import { Entry, Log } from './log';
 import { unreachable } from '../util/unreachable';
 import { createLogger } from 'bunyan';
 
@@ -30,6 +30,9 @@ export class RaftNode<LogValueType> {
             message: OutgoingMessage<LogValueType>,
         ) => void,
         private readonly resetElectionTimeout: () => void,
+        private readonly onEntriesCommited: (
+            entries: Array<Entry<LogValueType>>,
+        ) => void,
         private readonly logger: Logger,
         otherClusterNodes: ReadonlyArray<number>,
     ) {
@@ -88,13 +91,30 @@ export class RaftNode<LogValueType> {
     private dispatch(event: Event<LogValueType>) {
         const { newState, effects } = reduce(event, this.state);
 
-        if (newState.type !== this.state.type) {
-            this.logger.info(`RaftNode became ${newState.type}`);
-        }
+        this.onStateChange({ oldState: this.state, newState });
 
         this.state = newState;
 
         this.handleEffects(effects);
+    }
+
+    private onStateChange({
+        oldState,
+        newState,
+    }: {
+        oldState: State<LogValueType>;
+        newState: State<LogValueType>;
+    }) {
+        if (newState.type !== oldState.type) {
+            this.logger.info(`RaftNode became ${newState.type}`);
+        }
+
+        if (newState.commitIndex > oldState.commitIndex) {
+            const entries = newState.log
+                .getEntries()
+                .slice(oldState.commitIndex + 1, newState.commitIndex + 1);
+            this.onEntriesCommited([...entries]);
+        }
     }
 
     private handleEffects(effects: Effect<LogValueType>[]) {
