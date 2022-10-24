@@ -4,6 +4,7 @@ import { Logger } from '../config';
 import { NodeMessageCodec, NodeMessageDTO } from './messages';
 import { either } from 'fp-ts';
 import { NodeMessage } from './state';
+import { Entry } from './log';
 
 // TODO make timeouts ranges
 
@@ -21,6 +22,7 @@ export class Raft<LogValueType> {
     public constructor(
         private readonly nodePort: number,
         otherNodePorts: ReadonlyArray<number>,
+        onEntriesCommitted: (entries: Array<Entry<LogValueType>>) => void,
         private readonly logger: Logger,
         private readonly slowdownTimeBy: number = 1,
         private readonly leaderElectionTimeoutMs: number = 3000,
@@ -29,6 +31,7 @@ export class Raft<LogValueType> {
         this.raftNode = new RaftNode<LogValueType>(
             this.sendMessageToNode,
             this.resetElectionTimeout,
+            onEntriesCommitted,
             logger,
             otherNodePorts,
         );
