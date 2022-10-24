@@ -23,12 +23,13 @@ class TestEnvironment {
                 level: 'debug',
             });
             const otherNodes = allNodes.filter((id) => id != index);
-            const resetElectionTimeout = () => {
+            const noop = () => {
                 // noop
             };
             return new RaftNode<string>(
                 (message) => this.sendMessage({ message, sender: index }),
-                resetElectionTimeout,
+                noop,
+                noop,
                 logger,
                 otherNodes,
             );
@@ -129,5 +130,35 @@ describe('RaftNode', () => {
         expect(environment.nodes[0]!.__stateForTests.type).toEqual('follower');
         expect(environment.nodes[1]!.__stateForTests.type).toEqual('leader');
         expect(environment.nodes[2]!.__stateForTests.type).toEqual('follower');
+    });
+
+    it('sets commitIndex when replicating logs to a majority', () => {
+        const environment = new TestEnvironment(3);
+
+        // Make node 0 leader
+        environment.nodes[0]!.leaderElectionTimeout();
+
+        environment.disconnect(0);
+
+        environment.nodes[0]!.appendToLog('x <- 1');
+        environment.nodes[0]!.appendToLog('y <- 2');
+
+        environment.nodes.forEach((node) => {
+            expect(node.__stateForTests.commitIndex).toEqual(-1);
+        });
+
+        environment.connect(0);
+        environment.nodes[0]!.sendHeartbeatTimeoutForNode(1);
+
+        expect(environment.nodes[0]!.__stateForTests.commitIndex).toEqual(1);
+        expect(environment.nodes[1]!.__stateForTests.commitIndex).toEqual(-1);
+        expect(environment.nodes[2]!.__stateForTests.commitIndex).toEqual(-1);
+
+        // Second heartbeat to update the commitIndex
+        environment.nodes[0]!.sendHeartbeatTimeoutForNode(1);
+
+        expect(environment.nodes[0]!.__stateForTests.commitIndex).toEqual(1);
+        expect(environment.nodes[1]!.__stateForTests.commitIndex).toEqual(1);
+        expect(environment.nodes[2]!.__stateForTests.commitIndex).toEqual(-1);
     });
 });
