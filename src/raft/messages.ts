@@ -18,6 +18,7 @@ const AppendEntries = io.type({
             value: io.any,
         }),
     ),
+    leaderCommit: io.number,
 });
 
 const AppendEntriesResponse = io.type({
