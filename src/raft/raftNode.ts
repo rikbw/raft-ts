@@ -30,7 +30,7 @@ export class RaftNode<LogValueType> {
             message: OutgoingMessage<LogValueType>,
         ) => void,
         private readonly resetElectionTimeout: () => void,
-        private readonly onEntriesCommited: (
+        private readonly onEntriesCommitted: (
             entries: Array<Entry<LogValueType>>,
         ) => void,
         private readonly logger: Logger,
@@ -113,7 +113,7 @@ export class RaftNode<LogValueType> {
             const entries = newState.log
                 .getEntries()
                 .slice(oldState.commitIndex + 1, newState.commitIndex + 1);
-            this.onEntriesCommited([...entries]);
+            this.onEntriesCommitted([...entries]);
         }
     }
 

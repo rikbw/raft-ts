@@ -1,9 +1,11 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
 import { OutgoingMessage, RaftNode } from './raftNode';
 import { createLogger } from 'bunyan';
+import { Entry } from './log';
 
 class TestEnvironment {
     public readonly nodes: Array<RaftNode<string>>;
+    public readonly committedEntries: Record<number, Array<Entry<string>>> = {};
 
     private disconnectedNodes: Set<number> = new Set();
 
@@ -26,10 +28,17 @@ class TestEnvironment {
             const noop = () => {
                 // noop
             };
+            const onEntriesCommitted = (entries: Array<Entry<string>>) => {
+                if (this.committedEntries[index] == null) {
+                    this.committedEntries[index] = [];
+                }
+
+                this.committedEntries[index]!.push(...entries);
+            };
             return new RaftNode<string>(
                 (message) => this.sendMessage({ message, sender: index }),
                 noop,
-                noop,
+                onEntriesCommitted,
                 logger,
                 otherNodes,
             );
@@ -143,22 +152,40 @@ describe('RaftNode', () => {
         environment.nodes[0]!.appendToLog('x <- 1');
         environment.nodes[0]!.appendToLog('y <- 2');
 
-        environment.nodes.forEach((node) => {
+        environment.nodes.forEach((node, index) => {
             expect(node.__stateForTests.commitIndex).toEqual(-1);
+            expect(environment.committedEntries[index] ?? []).toEqual([]);
         });
 
         environment.connect(0);
         environment.nodes[0]!.sendHeartbeatTimeoutForNode(1);
 
+        const entries = [
+            {
+                term: 1,
+                value: 'x <- 1',
+            },
+            {
+                term: 1,
+                value: 'y <- 2',
+            },
+        ];
+
         expect(environment.nodes[0]!.__stateForTests.commitIndex).toEqual(1);
+        expect(environment.committedEntries[0]).toEqual(entries);
         expect(environment.nodes[1]!.__stateForTests.commitIndex).toEqual(-1);
+        expect(environment.committedEntries[1] ?? []).toEqual([]);
         expect(environment.nodes[2]!.__stateForTests.commitIndex).toEqual(-1);
+        expect(environment.committedEntries[2] ?? []).toEqual([]);
 
         // Second heartbeat to update the commitIndex
         environment.nodes[0]!.sendHeartbeatTimeoutForNode(1);
 
         expect(environment.nodes[0]!.__stateForTests.commitIndex).toEqual(1);
+        expect(environment.committedEntries[0]).toEqual(entries);
         expect(environment.nodes[1]!.__stateForTests.commitIndex).toEqual(1);
+        expect(environment.committedEntries[1]).toEqual(entries);
         expect(environment.nodes[2]!.__stateForTests.commitIndex).toEqual(-1);
+        expect(environment.committedEntries[2] ?? []).toEqual([]);
     });
 });
