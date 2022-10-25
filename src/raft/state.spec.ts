@@ -7,7 +7,7 @@ import {
     LeaderState,
     NodeMessage,
 } from './state';
-import { Log } from './log';
+import { Entry, Log } from './log';
 
 const followerState = ({
     currentTerm = 0,
@@ -54,18 +54,42 @@ const leaderState = ({
     commitIndex,
 });
 
+const createLogEntries = ({
+    nbEntries = 2,
+    term,
+}: {
+    nbEntries?: number;
+    term: number;
+}): Array<Entry<string>> => {
+    return Array(nbEntries)
+        .fill(undefined)
+        .map(
+            (_, index): Entry<string> => ({
+                term,
+                value: `x <- ${index}`,
+                id: {
+                    clientId: 1,
+                    requestSerial: index,
+                },
+            }),
+        );
+};
+
+const createLog = (...params: Parameters<typeof createLogEntries>) => {
+    const entries = createLogEntries(...params);
+    return new Log(entries);
+};
+
 describe('state', () => {
     describe('follower', () => {
         it('transitions to candidate and requests votes when election timeout fires', () => {
             const state = followerState({
                 currentTerm: 0,
                 otherClusterNodes: [0, 2],
-                log: new Log([
-                    {
-                        term: 0,
-                        value: 'x <- 2',
-                    },
-                ]),
+                log: createLog({
+                    nbEntries: 1,
+                    term: 0,
+                }),
             });
             const event: Event<string> = {
                 type: 'electionTimeout',
@@ -162,6 +186,10 @@ describe('state', () => {
                     log: new Log([]),
                 });
                 const node = 1;
+                const entries = createLogEntries({
+                    nbEntries: 2,
+                    term: 1,
+                });
                 const event: Event<string> = {
                     type: 'receivedMessageFromNode',
                     node,
@@ -169,32 +197,14 @@ describe('state', () => {
                         type: 'appendEntries',
                         term: 2,
                         previousEntryIdentifier: undefined,
-                        entries: [
-                            {
-                                term: 1,
-                                value: 'w <- 2',
-                            },
-                            {
-                                term: 1,
-                                value: 'x <- 4',
-                            },
-                        ],
+                        entries,
                         leaderCommit: -1,
                     },
                 };
 
                 const newState = followerState({
                     ...state,
-                    log: new Log([
-                        {
-                            term: 1,
-                            value: 'w <- 2',
-                        },
-                        {
-                            term: 1,
-                            value: 'x <- 4',
-                        },
-                    ]),
+                    log: new Log(entries),
                 });
                 const effects: Array<Effect<string>> = [
                     {
@@ -221,12 +231,7 @@ describe('state', () => {
             it('does not append to the log if the previousEntryIdentifier does not match', () => {
                 const state = followerState({
                     currentTerm: 2,
-                    log: new Log([
-                        {
-                            term: 1,
-                            value: 'x <- 2',
-                        },
-                    ]),
+                    log: createLog({ term: 1, nbEntries: 1 }),
                 });
                 const node = 1;
                 const event: Event<string> = {
@@ -312,16 +317,14 @@ describe('state', () => {
             it('updates commitIndex', () => {
                 const state = followerState({
                     commitIndex: 1,
-                    log: new Log([
-                        {
-                            term: 0,
-                            value: 'x <- 1',
-                        },
-                        {
-                            term: 0,
-                            value: 'y <- 1',
-                        },
-                    ]),
+                    log: createLog({
+                        nbEntries: 2,
+                        term: 0,
+                    }),
+                });
+                const entries = createLogEntries({
+                    nbEntries: 1,
+                    term: 0,
                 });
                 const event: Event<string> = {
                     type: 'receivedMessageFromNode',
@@ -329,12 +332,7 @@ describe('state', () => {
                     message: {
                         type: 'appendEntries',
                         term: 0,
-                        entries: [
-                            {
-                                term: 0,
-                                value: 'z <- 1',
-                            },
-                        ],
+                        entries,
                         leaderCommit: 2,
                         previousEntryIdentifier: {
                             term: 0,
@@ -345,20 +343,7 @@ describe('state', () => {
 
                 const newState = followerState({
                     commitIndex: 2,
-                    log: new Log([
-                        {
-                            term: 0,
-                            value: 'x <- 1',
-                        },
-                        {
-                            term: 0,
-                            value: 'y <- 1',
-                        },
-                        {
-                            term: 0,
-                            value: 'z <- 1',
-                        },
-                    ]),
+                    log: new Log([...state.log.getEntries(), ...entries]),
                 });
                 const effects: Array<Effect<string>> = [
                     {
@@ -387,18 +372,14 @@ describe('state', () => {
                     commitIndex: -1,
                     log: new Log([]),
                 });
+                const entries = createLogEntries({ term: 0, nbEntries: 1 });
                 const event: Event<string> = {
                     type: 'receivedMessageFromNode',
                     node: 0,
                     message: {
                         type: 'appendEntries',
                         term: 0,
-                        entries: [
-                            {
-                                term: 0,
-                                value: 'x <- 1',
-                            },
-                        ],
+                        entries,
                         leaderCommit: 2,
                         previousEntryIdentifier: undefined,
                     },
@@ -406,12 +387,7 @@ describe('state', () => {
 
                 const newState = followerState({
                     commitIndex: 0,
-                    log: new Log([
-                        {
-                            term: 0,
-                            value: 'x <- 1',
-                        },
-                    ]),
+                    log: new Log(entries),
                 });
                 const effects: Array<Effect<string>> = [
                     {
@@ -436,14 +412,10 @@ describe('state', () => {
             });
 
             it('does not decrease commitIndex', () => {
+                const entries = createLogEntries({ nbEntries: 1, term: 0 });
                 const state = followerState({
                     commitIndex: 0,
-                    log: new Log([
-                        {
-                            term: 0,
-                            value: 'x <- 1',
-                        },
-                    ]),
+                    log: new Log(entries),
                 });
                 const event: Event<string> = {
                     type: 'receivedMessageFromNode',
@@ -451,12 +423,7 @@ describe('state', () => {
                     message: {
                         type: 'appendEntries',
                         term: 0,
-                        entries: [
-                            {
-                                term: 0,
-                                value: 'x <- 1',
-                            },
-                        ],
+                        entries,
                         leaderCommit: -1,
                         previousEntryIdentifier: undefined,
                     },
@@ -464,12 +431,7 @@ describe('state', () => {
 
                 const newState = followerState({
                     commitIndex: 0,
-                    log: new Log([
-                        {
-                            term: 0,
-                            value: 'x <- 1',
-                        },
-                    ]),
+                    log: new Log(entries),
                 });
                 const effects: Array<Effect<string>> = [
                     {
@@ -586,12 +548,7 @@ describe('state', () => {
                 const state = followerState({
                     currentTerm: 0,
                     votedFor: 0,
-                    log: new Log([
-                        {
-                            term: 0,
-                            value: 'x <- 9',
-                        },
-                    ]),
+                    log: createLog({ term: 0, nbEntries: 1 }),
                 });
                 const event: Event<string> = {
                     type: 'receivedMessageFromNode',
@@ -730,12 +687,7 @@ describe('state', () => {
 
             it('does not vote if the requesters latest log term is out of date (but does update its term)', () => {
                 const state = followerState({
-                    log: new Log([
-                        {
-                            term: 2,
-                            value: 'x <- 2',
-                        },
-                    ]),
+                    log: createLog({ nbEntries: 1, term: 2 }),
                     currentTerm: 2,
                 });
                 const event: Event<string> = {
@@ -774,16 +726,7 @@ describe('state', () => {
 
             it('does not vote if the requesters latest log index is out of date', () => {
                 const state = followerState({
-                    log: new Log([
-                        {
-                            term: 2,
-                            value: 'x <- 2',
-                        },
-                        {
-                            term: 2,
-                            value: 'y <- 2',
-                        },
-                    ]),
+                    log: createLog({ nbEntries: 2, term: 2 }),
                     currentTerm: 2,
                 });
                 const event: Event<string> = {
@@ -903,6 +846,7 @@ describe('state', () => {
             const state = candidateState({
                 currentTerm: 2,
             });
+            const entries = createLogEntries({ nbEntries: 1, term: 2 });
             const event: Event<string> = {
                 type: 'receivedMessageFromNode',
                 node: 2,
@@ -910,24 +854,14 @@ describe('state', () => {
                     type: 'appendEntries',
                     previousEntryIdentifier: undefined,
                     term: 2,
-                    entries: [
-                        {
-                            term: 2,
-                            value: 'x <- 1',
-                        },
-                    ],
+                    entries,
                     leaderCommit: -1,
                 },
             };
 
             const newState = followerState({
                 currentTerm: 2,
-                log: new Log([
-                    {
-                        term: 2,
-                        value: 'x <- 1',
-                    },
-                ]),
+                log: new Log(entries),
             });
             const effects: Array<Effect<string>> = [
                 {
@@ -991,18 +925,14 @@ describe('state', () => {
                 currentTerm: 1,
                 commitIndex: -1,
             });
+            const entries = createLogEntries({ nbEntries: 1, term: 1 });
             const event: Event<string> = {
                 type: 'receivedMessageFromNode',
                 node: 0,
                 message: {
                     type: 'appendEntries',
                     leaderCommit: 0,
-                    entries: [
-                        {
-                            term: 1,
-                            value: 'x <- 1',
-                        },
-                    ],
+                    entries,
                     term: 1,
                     previousEntryIdentifier: undefined,
                 },
@@ -1010,12 +940,7 @@ describe('state', () => {
 
             const newState = followerState({
                 currentTerm: 1,
-                log: new Log([
-                    {
-                        term: 1,
-                        value: 'x <- 1',
-                    },
-                ]),
+                log: new Log(entries),
                 commitIndex: 0,
             });
             expect(reduce(event, state).newState).toEqual(newState);
@@ -1027,7 +952,7 @@ describe('state', () => {
                     currentTerm: 1,
                     otherClusterNodes: [1, 2],
                     votes: new Set(),
-                    log: new Log([{ term: 0, value: 'x <- 2' }]),
+                    log: createLog({ nbEntries: 1, term: 0 }),
                     commitIndex: 0,
                 });
                 const event: Event<string> = {
@@ -1254,10 +1179,18 @@ describe('state', () => {
                         {
                             value: 'x <- 1',
                             term: 1,
+                            id: {
+                                clientId: 1,
+                                requestSerial: 1,
+                            },
                         },
                         {
                             value: 'y <- 2',
                             term: 2,
+                            id: {
+                                clientId: 1,
+                                requestSerial: 2,
+                            },
                         },
                     ]),
                     commitIndex: 0,
@@ -1299,6 +1232,10 @@ describe('state', () => {
                                 {
                                     value: 'y <- 2',
                                     term: 2,
+                                    id: {
+                                        clientId: 1,
+                                        requestSerial: 2,
+                                    },
                                 },
                             ],
                             leaderCommit: 0,
@@ -1312,18 +1249,10 @@ describe('state', () => {
             });
 
             it('uses null as an indicator of the beginning of the log', () => {
+                const entries = createLogEntries({ nbEntries: 2, term: 2 });
                 const state = leaderState({
                     currentTerm: 2,
-                    log: new Log<string>([
-                        {
-                            value: 'x <- 1',
-                            term: 1,
-                        },
-                        {
-                            value: 'y <- 2',
-                            term: 2,
-                        },
-                    ]),
+                    log: new Log<string>(entries),
                 });
                 const node = 4;
                 const event: Event<string> = {
@@ -1355,16 +1284,7 @@ describe('state', () => {
                             type: 'appendEntries',
                             term: 2,
                             previousEntryIdentifier: undefined,
-                            entries: [
-                                {
-                                    value: 'x <- 1',
-                                    term: 1,
-                                },
-                                {
-                                    value: 'y <- 2',
-                                    term: 2,
-                                },
-                            ],
+                            entries,
                             leaderCommit: -1,
                         },
                     },
@@ -1564,16 +1484,7 @@ describe('state', () => {
             it('updates commitIndex if necessary', () => {
                 const state = leaderState({
                     currentTerm: 1,
-                    log: new Log([
-                        {
-                            term: 0,
-                            value: 'x <- 2',
-                        },
-                        {
-                            term: 1,
-                            value: 'y <- 3',
-                        },
-                    ]),
+                    log: createLog({ nbEntries: 2, term: 1 }),
                     commitIndex: -1,
                     followerInfo: {
                         1: {
@@ -1769,14 +1680,10 @@ describe('state', () => {
         });
 
         it('appends to the log when receiving clientAppendToLog', () => {
+            const initialEntries = createLogEntries({ nbEntries: 1, term: 1 });
             const state = leaderState({
                 currentTerm: 2,
-                log: new Log([
-                    {
-                        term: 1,
-                        value: 'x <- 2',
-                    },
-                ]),
+                log: new Log(initialEntries),
                 otherClusterNodes: [0, 2],
                 followerInfo: {
                     0: { nextIndex: 1, matchIndex: 0 },
@@ -1792,13 +1699,14 @@ describe('state', () => {
             const newState = leaderState({
                 ...state,
                 log: new Log([
-                    {
-                        term: 1,
-                        value: 'x <- 2',
-                    },
+                    ...initialEntries,
                     {
                         term: 2,
                         value: 'y <- 3',
+                        id: {
+                            clientId: 1,
+                            requestSerial: 1,
+                        },
                     },
                 ]),
             });
@@ -1813,6 +1721,10 @@ describe('state', () => {
                             {
                                 value: 'y <- 3',
                                 term: 2,
+                                id: {
+                                    clientId: 1,
+                                    requestSerial: 1,
+                                },
                             },
                         ],
                         previousEntryIdentifier: {
@@ -1829,13 +1741,14 @@ describe('state', () => {
                         type: 'appendEntries',
                         term: 2,
                         entries: [
-                            {
-                                value: 'x <- 2',
-                                term: 1,
-                            },
+                            ...initialEntries,
                             {
                                 value: 'y <- 3',
                                 term: 2,
+                                id: {
+                                    clientId: 1,
+                                    requestSerial: 1,
+                                },
                             },
                         ],
                         previousEntryIdentifier: undefined,

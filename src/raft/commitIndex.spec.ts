@@ -3,6 +3,11 @@ import { LeaderState } from './state';
 import { array, function as func } from 'fp-ts';
 import { commitIndexFromState } from './commitIndex';
 
+const id = {
+    clientId: 1,
+    requestSerial: 2,
+};
+
 describe('commitIndex', () => {
     type TestCase = {
         followerMatchIndex: Record<number, number>;
@@ -19,10 +24,12 @@ describe('commitIndex', () => {
                 {
                     term: 1,
                     value: 'x <- 2',
+                    id,
                 },
                 {
                     term: 2,
                     value: 'x <- 2',
+                    id,
                 },
             ],
             currentCommitIndex: 0,
@@ -39,10 +46,12 @@ describe('commitIndex', () => {
                 {
                     term: 1,
                     value: 'x <- 2',
+                    id,
                 },
                 {
                     term: 3,
                     value: 'x <- 3',
+                    id,
                 },
             ],
             currentCommitIndex: 0,
@@ -70,14 +79,17 @@ describe('commitIndex', () => {
                 {
                     term: 1,
                     value: 'x <- 2',
+                    id,
                 },
                 {
                     term: 2,
                     value: 'x <- 3',
+                    id,
                 },
                 {
                     term: 3,
                     value: 'x <- 4',
+                    id,
                 },
             ],
             currentCommitIndex: -1,
@@ -96,14 +108,17 @@ describe('commitIndex', () => {
                 {
                     term: 1,
                     value: 'x <- 2',
+                    id,
                 },
                 {
                     term: 1,
                     value: 'x <- 3',
+                    id,
                 },
                 {
                     term: 1,
                     value: 'x <- 4',
+                    id,
                 },
             ],
             currentCommitIndex: -1,

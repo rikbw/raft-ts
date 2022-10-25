@@ -102,10 +102,18 @@ describe('RaftNode', () => {
                 {
                     term: 1,
                     value: 'x <- 1',
+                    id: {
+                        clientId: expect.any(Number),
+                        requestSerial: expect.any(Number),
+                    },
                 },
                 {
                     term: 1,
                     value: 'y <- 2',
+                    id: {
+                        clientId: expect.any(Number),
+                        requestSerial: expect.any(Number),
+                    },
                 },
             ]);
         });
@@ -164,10 +172,18 @@ describe('RaftNode', () => {
             {
                 term: 1,
                 value: 'x <- 1',
+                id: {
+                    clientId: expect.any(Number),
+                    requestSerial: expect.any(Number),
+                },
             },
             {
                 term: 1,
                 value: 'y <- 2',
+                id: {
+                    clientId: expect.any(Number),
+                    requestSerial: expect.any(Number),
+                },
             },
         ];
 

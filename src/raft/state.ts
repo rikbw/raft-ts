@@ -867,6 +867,11 @@ function reduceClientAppendToLog<LogValueType>(
             {
                 term: state.currentTerm,
                 value,
+                // TODO set these values correctly
+                id: {
+                    clientId: 1,
+                    requestSerial: 1,
+                },
             },
         ],
     });

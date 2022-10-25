@@ -7,6 +7,10 @@ export type EntryIdentifier = {
 
 export type Entry<ValueType> = {
     term: number;
+    id: {
+        clientId: number;
+        requestSerial: number;
+    };
     value: ValueType;
 };
 

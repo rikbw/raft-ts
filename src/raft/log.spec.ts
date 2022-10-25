@@ -1,5 +1,10 @@
 import { Log } from './log';
 
+const id = {
+    clientId: 123,
+    requestSerial: 456,
+};
+
 describe('Log', () => {
     describe('appendEntries', () => {
         it('accepts the entries if the previousIndex is the same', () => {
@@ -7,6 +12,7 @@ describe('Log', () => {
                 {
                     term: 1,
                     value: 'x <- 1',
+                    id,
                 },
             ]);
 
@@ -19,6 +25,7 @@ describe('Log', () => {
                     {
                         term: 2,
                         value: 'y <- 2',
+                        id,
                     },
                 ],
             });
@@ -28,16 +35,19 @@ describe('Log', () => {
                 {
                     term: 1,
                     value: 'x <- 1',
+                    id,
                 },
                 {
                     term: 2,
                     value: 'y <- 2',
+                    id,
                 },
             ]);
             expect(log.getEntries()).toEqual([
                 {
                     term: 1,
                     value: 'x <- 1',
+                    id,
                 },
             ]);
         });
@@ -51,10 +61,12 @@ describe('Log', () => {
                     {
                         term: 3,
                         value: 'x <- 8',
+                        id,
                     },
                     {
                         term: 3,
                         value: 'y <- 12',
+                        id,
                     },
                 ],
             });
@@ -64,10 +76,12 @@ describe('Log', () => {
                 {
                     term: 3,
                     value: 'x <- 8',
+                    id,
                 },
                 {
                     term: 3,
                     value: 'y <- 12',
+                    id,
                 },
             ]);
         });
@@ -77,6 +91,7 @@ describe('Log', () => {
                 {
                     term: 1,
                     value: 'x <- 1',
+                    id,
                 },
             ];
             const log = new Log(initialEntries);
@@ -94,10 +109,12 @@ describe('Log', () => {
                                 {
                                     value: 'x <- 2',
                                     term: 1,
+                                    id,
                                 },
                                 {
                                     term: 1,
                                     value: 'y <- 3',
+                                    id,
                                 },
                             ],
                         });
@@ -119,10 +136,12 @@ describe('Log', () => {
                 {
                     value: 'x <- 2',
                     term: 1,
+                    id,
                 },
                 {
                     term: 1,
                     value: 'y <- 3',
+                    id,
                 },
             ]);
         });
@@ -132,14 +151,17 @@ describe('Log', () => {
                 {
                     term: 1,
                     value: 'x <- 1',
+                    id,
                 },
                 {
                     term: 1,
                     value: 'y <- 1',
+                    id,
                 },
                 {
                     term: 1,
                     value: 'z <- 1',
+                    id,
                 },
             ]);
 
@@ -152,10 +174,12 @@ describe('Log', () => {
                     {
                         term: 2,
                         value: 'a <- 2',
+                        id,
                     },
                     {
                         term: 2,
                         value: 'b <- 3',
+                        id,
                     },
                 ],
             });
@@ -165,14 +189,17 @@ describe('Log', () => {
                 {
                     term: 1,
                     value: 'x <- 1',
+                    id,
                 },
                 {
                     term: 2,
                     value: 'a <- 2',
+                    id,
                 },
                 {
                     term: 2,
                     value: 'b <- 3',
+                    id,
                 },
             ]);
         });
@@ -182,6 +209,7 @@ describe('Log', () => {
                 {
                     term: 3,
                     value: 'z <- 123',
+                    id,
                 },
             ];
             const log = new Log(initialEntries);
@@ -192,6 +220,7 @@ describe('Log', () => {
                     {
                         term: 4,
                         value: 'x <- 1',
+                        id,
                     },
                 ],
             });
@@ -201,6 +230,7 @@ describe('Log', () => {
                 {
                     term: 4,
                     value: 'x <- 1',
+                    id,
                 },
             ]);
         });
@@ -210,6 +240,7 @@ describe('Log', () => {
                 {
                     term: 3,
                     value: 'z <- 123',
+                    id,
                 },
             ];
             const log = new Log(initialEntries);
@@ -223,6 +254,7 @@ describe('Log', () => {
                     {
                         term: 4,
                         value: 'w <- 34',
+                        id,
                     },
                 ],
             });
@@ -236,6 +268,7 @@ describe('Log', () => {
                 {
                     term: 3,
                     value: 'z <- 123',
+                    id,
                 },
             ];
             const log = new Log(initialEntries);
@@ -249,6 +282,7 @@ describe('Log', () => {
                     {
                         term: 4,
                         value: 'w <- 34',
+                        id,
                     },
                 ],
             });
@@ -262,6 +296,7 @@ describe('Log', () => {
                 {
                     term: 3,
                     value: 'z <- 123',
+                    id,
                 },
             ];
             const log = new Log(initialEntries);
@@ -294,14 +329,17 @@ describe('Log', () => {
             {
                 term: 1,
                 value: 'x <- 1',
+                id,
             },
             {
                 term: 1,
                 value: 'y <- 1',
+                id,
             },
             {
                 term: 1,
                 value: 'z <- 1',
+                id,
             },
         ];
         const log = new Log(initialEntries);
@@ -315,6 +353,7 @@ describe('Log', () => {
                 {
                     value: 'y <- 1',
                     term: 1,
+                    id,
                 },
             ],
         });
