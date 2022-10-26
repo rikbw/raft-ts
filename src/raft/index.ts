@@ -141,18 +141,31 @@ export class Raft<LogValueType> {
         });
     };
 
-    // Resolves when the entry has been committed and is safe to apply.
-    public addToLog(value: LogValueType, requestId: RequestId): Promise<void> {
+    // Resolves
+    // - with true when the entry has been committed and is safe to apply.
+    // - with false when it timed out. The entry can be committed in the future.
+    public addToLog(
+        value: LogValueType,
+        requestId: RequestId,
+    ): Promise<boolean> {
         this.raftNode.appendToLog(value, requestId);
 
-        return new Promise((resolve) => {
-            const serializedRequestId = serializeRequestId(requestId);
-            const pendingWriter = () => resolve(undefined);
-            this.pendingWritersForRequestId.set(
-                serializedRequestId,
-                pendingWriter,
-            );
-        });
+        const waitForLogToBeCommitted: Promise<boolean> = new Promise(
+            (resolve) => {
+                const serializedRequestId = serializeRequestId(requestId);
+                const pendingWriter = () => resolve(true);
+                this.pendingWritersForRequestId.set(
+                    serializedRequestId,
+                    pendingWriter,
+                );
+            },
+        );
+
+        const timeout: Promise<boolean> = new Promise((resolve) =>
+            setTimeout(() => resolve(false), 10000),
+        );
+
+        return Promise.race([waitForLogToBeCommitted, timeout]);
     }
 
     // This should be called before every read. It resolves when:
