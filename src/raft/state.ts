@@ -1,5 +1,5 @@
 import { unreachable } from '../util/unreachable';
-import { Entry, EntryIdentifier, Log } from './log';
+import { Entry, EntryIdentifier, Log, RequestId } from './log';
 import { commitIndexFromState } from './commitIndex';
 import Immutable from 'seamless-immutable';
 
@@ -73,6 +73,7 @@ type MutableEvent<LogValueType> =
     | {
           type: 'clientAppendToLog';
           value: LogValueType;
+          requestId: RequestId;
       };
 
 export type Event<LogValueType> = Readonly<MutableEvent<LogValueType>>;
@@ -139,7 +140,7 @@ export function reduce<LogValueType>(
             return reduceSendHeartbeatMessageTimeout(state, event.node);
 
         case 'clientAppendToLog':
-            return reduceClientAppendToLog(state, event.value);
+            return reduceClientAppendToLog(state, event.value, event.requestId);
 
         default:
             return unreachable(event);
@@ -854,6 +855,7 @@ function reduceReceivedRequestVote<LogValueType>({
 function reduceClientAppendToLog<LogValueType>(
     state: State<LogValueType>,
     value: LogValueType,
+    id: RequestId,
 ): ReducerResult<LogValueType> {
     if (state.type !== 'leader') {
         throw new Error('can only append to log of leader node');
@@ -867,11 +869,7 @@ function reduceClientAppendToLog<LogValueType>(
             {
                 term: state.currentTerm,
                 value,
-                // TODO set these values correctly
-                id: {
-                    clientId: 1,
-                    requestSerial: 1,
-                },
+                id,
             },
         ],
     });

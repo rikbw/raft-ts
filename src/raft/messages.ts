@@ -16,6 +16,10 @@ const AppendEntries = io.type({
         io.type({
             term: io.number,
             value: io.any,
+            id: io.type({
+                requestSerial: io.number,
+                clientId: io.number,
+            }),
         }),
     ),
     leaderCommit: io.number,

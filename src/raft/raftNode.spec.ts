@@ -94,8 +94,14 @@ describe('RaftNode', () => {
 
         expect(environment.nodes[0]!.__stateForTests.type).toEqual('leader');
 
-        environment.nodes[0]!.appendToLog('x <- 1');
-        environment.nodes[0]!.appendToLog('y <- 2');
+        environment.nodes[0]!.appendToLog('x <- 1', {
+            clientId: 1,
+            requestSerial: 1,
+        });
+        environment.nodes[0]!.appendToLog('y <- 2', {
+            clientId: 1,
+            requestSerial: 2,
+        });
 
         environment.nodes.forEach((node) => {
             expect(node.__stateForTests.log.getEntries()).toEqual([
@@ -103,16 +109,16 @@ describe('RaftNode', () => {
                     term: 1,
                     value: 'x <- 1',
                     id: {
-                        clientId: expect.any(Number),
-                        requestSerial: expect.any(Number),
+                        clientId: 1,
+                        requestSerial: 1,
                     },
                 },
                 {
                     term: 1,
                     value: 'y <- 2',
                     id: {
-                        clientId: expect.any(Number),
-                        requestSerial: expect.any(Number),
+                        clientId: 1,
+                        requestSerial: 2,
                     },
                 },
             ]);
@@ -126,8 +132,14 @@ describe('RaftNode', () => {
 
         environment.disconnect(2);
 
-        environment.nodes[0]!.appendToLog('x <- 1');
-        environment.nodes[0]!.appendToLog('y <- 2');
+        environment.nodes[0]!.appendToLog('x <- 1', {
+            clientId: 2,
+            requestSerial: 10,
+        });
+        environment.nodes[0]!.appendToLog('y <- 2', {
+            clientId: 2,
+            requestSerial: 11,
+        });
 
         // Node 0 and 1 have the log, node 2 has nothing.
         expect(environment.nodes[0]!.__stateForTests.log.length).toEqual(2);
@@ -157,8 +169,14 @@ describe('RaftNode', () => {
 
         environment.disconnect(0);
 
-        environment.nodes[0]!.appendToLog('x <- 1');
-        environment.nodes[0]!.appendToLog('y <- 2');
+        environment.nodes[0]!.appendToLog('x <- 1', {
+            clientId: 1,
+            requestSerial: 4,
+        });
+        environment.nodes[0]!.appendToLog('y <- 2', {
+            clientId: 2,
+            requestSerial: 2,
+        });
 
         environment.nodes.forEach((node, index) => {
             expect(node.__stateForTests.commitIndex).toEqual(-1);
@@ -173,16 +191,16 @@ describe('RaftNode', () => {
                 term: 1,
                 value: 'x <- 1',
                 id: {
-                    clientId: expect.any(Number),
-                    requestSerial: expect.any(Number),
+                    clientId: 1,
+                    requestSerial: 4,
                 },
             },
             {
                 term: 1,
                 value: 'y <- 2',
                 id: {
-                    clientId: expect.any(Number),
-                    requestSerial: expect.any(Number),
+                    clientId: 2,
+                    requestSerial: 2,
                 },
             },
         ];

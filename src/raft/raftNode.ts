@@ -6,7 +6,7 @@ import {
     Effect,
     NodeMessage,
 } from './state';
-import { Entry, Log } from './log';
+import { Entry, Log, RequestId } from './log';
 import { unreachable } from '../util/unreachable';
 import { createLogger } from 'bunyan';
 
@@ -43,7 +43,7 @@ export class RaftNode<LogValueType> {
         );
     }
 
-    public appendToLog(value: LogValueType) {
+    public appendToLog(value: LogValueType, requestId: RequestId) {
         if (this.state.type !== 'leader') {
             return false;
         }
@@ -51,6 +51,7 @@ export class RaftNode<LogValueType> {
         this.dispatch({
             type: 'clientAppendToLog',
             value,
+            requestId,
         });
         return true;
     }

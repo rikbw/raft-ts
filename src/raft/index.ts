@@ -4,7 +4,10 @@ import { Logger } from '../config';
 import { NodeMessageCodec, NodeMessageDTO } from './messages';
 import { either } from 'fp-ts';
 import { NodeMessage } from './state';
-import { Entry } from './log';
+import { Entry, RequestId } from './log';
+
+const serializeRequestId = ({ clientId, requestSerial }: RequestId) =>
+    `${clientId}-${requestSerial}`;
 
 // TODO make timeouts ranges
 
@@ -17,12 +20,17 @@ export class Raft<LogValueType> {
 
     private readonly heartbeatTimeouts: Record<number, NodeJS.Timeout> = {};
 
+    private readonly pendingWritersForRequestId: Map<string, () => void> =
+        new Map();
+
     // For now, assuming we run on ports on the same machine.
     // That can easily be changed later to ip/port combinations.
     public constructor(
         private readonly nodePort: number,
         otherNodePorts: ReadonlyArray<number>,
-        onEntriesCommitted: (entries: Array<Entry<LogValueType>>) => void,
+        private readonly clientOnEntriesCommitted: (
+            entries: Array<Entry<LogValueType>>,
+        ) => void,
         private readonly logger: Logger,
         private readonly slowdownTimeBy: number = 1,
         private readonly leaderElectionTimeoutMs: number = 3000,
@@ -31,7 +39,7 @@ export class Raft<LogValueType> {
         this.raftNode = new RaftNode<LogValueType>(
             this.sendMessageToNode,
             this.resetElectionTimeout,
-            onEntriesCommitted,
+            this.onEntriesCommitted,
             logger,
             otherNodePorts,
         );
@@ -120,10 +128,31 @@ export class Raft<LogValueType> {
         );
     };
 
+    private onEntriesCommitted = (entries: Array<Entry<LogValueType>>) => {
+        this.clientOnEntriesCommitted(entries);
+        entries.forEach((entry) => {
+            const serializedRequestId = serializeRequestId(entry.id);
+            const resolvePendingWriter =
+                this.pendingWritersForRequestId.get(serializedRequestId);
+            if (resolvePendingWriter != null) {
+                resolvePendingWriter();
+                this.pendingWritersForRequestId.delete(serializedRequestId);
+            }
+        });
+    };
+
     // Resolves when the entry has been committed and is safe to apply.
-    // It returns a promise with the values that should be applied to the state machine.
-    public addToLog(_value: LogValueType): Promise<Array<LogValueType>> {
-        throw new Error('not implemented');
+    public addToLog(value: LogValueType, requestId: RequestId): Promise<void> {
+        this.raftNode.appendToLog(value, requestId);
+
+        return new Promise((resolve) => {
+            const serializedRequestId = serializeRequestId(requestId);
+            const pendingWriter = () => resolve(undefined);
+            this.pendingWritersForRequestId.set(
+                serializedRequestId,
+                pendingWriter,
+            );
+        });
     }
 
     // This should be called before every read. It resolves when:

@@ -5,12 +5,14 @@ export type EntryIdentifier = {
     term: number;
 };
 
+export type RequestId = {
+    clientId: number;
+    requestSerial: number;
+};
+
 export type Entry<ValueType> = {
     term: number;
-    id: {
-        clientId: number;
-        requestSerial: number;
-    };
+    id: RequestId;
     value: ValueType;
 };
 

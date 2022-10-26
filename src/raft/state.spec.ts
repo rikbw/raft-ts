@@ -1694,6 +1694,10 @@ describe('state', () => {
             const event: Event<string> = {
                 type: 'clientAppendToLog',
                 value: 'y <- 3',
+                requestId: {
+                    clientId: 12,
+                    requestSerial: 34,
+                },
             };
 
             const newState = leaderState({
@@ -1704,8 +1708,8 @@ describe('state', () => {
                         term: 2,
                         value: 'y <- 3',
                         id: {
-                            clientId: 1,
-                            requestSerial: 1,
+                            clientId: 12,
+                            requestSerial: 34,
                         },
                     },
                 ]),
@@ -1722,8 +1726,8 @@ describe('state', () => {
                                 value: 'y <- 3',
                                 term: 2,
                                 id: {
-                                    clientId: 1,
-                                    requestSerial: 1,
+                                    clientId: 12,
+                                    requestSerial: 34,
                                 },
                             },
                         ],
@@ -1746,8 +1750,8 @@ describe('state', () => {
                                 value: 'y <- 3',
                                 term: 2,
                                 id: {
-                                    clientId: 1,
-                                    requestSerial: 1,
+                                    clientId: 12,
+                                    requestSerial: 34,
                                 },
                             },
                         ],
