@@ -1,6 +1,5 @@
-import { Raft } from '../src/raft';
+import { Raft, StateMachine } from '../src/raft';
 import { createLogger } from 'bunyan';
-import { Entry } from '../src/raft/log';
 
 const logger = createLogger({
     name: 'raft',
@@ -20,8 +19,10 @@ const allNodePorts = Array(clusterSize)
 
 const otherNodePorts = allNodePorts.filter((port) => port != nodePort);
 
-const onEntriesCommitted = (entries: Array<Entry<string>>) => {
-    logger.info('New entries committed', { entries });
+const stateMachine: StateMachine<string> = {
+    handleValue(value: string) {
+        logger.info(value);
+    },
 };
 
-new Raft(nodePort, otherNodePorts, onEntriesCommitted, logger, 2);
+new Raft(nodePort, otherNodePorts, stateMachine, logger, 2);

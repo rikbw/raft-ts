@@ -9,6 +9,10 @@ import { Entry, RequestId } from './log';
 const serializeRequestId = ({ clientId, requestSerial }: RequestId) =>
     `${clientId}-${requestSerial}`;
 
+export type StateMachine<LogValueType> = {
+    handleValue(value: LogValueType): void;
+};
+
 // TODO make timeouts ranges
 
 // Class instance will maintain internal state, and respond to things from the world.
@@ -23,14 +27,15 @@ export class Raft<LogValueType> {
     private readonly pendingWritersForRequestId: Map<string, () => void> =
         new Map();
 
+    private readonly serialProcessedPerClientId: Map<number, number> =
+        new Map();
+
     // For now, assuming we run on ports on the same machine.
     // That can easily be changed later to ip/port combinations.
     public constructor(
         private readonly nodePort: number,
         otherNodePorts: ReadonlyArray<number>,
-        private readonly clientOnEntriesCommitted: (
-            entries: Array<Entry<LogValueType>>,
-        ) => void,
+        private readonly stateMachine: StateMachine<LogValueType>,
         private readonly logger: Logger,
         private readonly slowdownTimeBy: number = 1,
         private readonly leaderElectionTimeoutMs: number = 3000,
@@ -129,17 +134,36 @@ export class Raft<LogValueType> {
     };
 
     private onEntriesCommitted = (entries: Array<Entry<LogValueType>>) => {
-        this.clientOnEntriesCommitted(entries);
         entries.forEach((entry) => {
-            const serializedRequestId = serializeRequestId(entry.id);
-            const resolvePendingWriter =
-                this.pendingWritersForRequestId.get(serializedRequestId);
-            if (resolvePendingWriter != null) {
-                resolvePendingWriter();
-                this.pendingWritersForRequestId.delete(serializedRequestId);
-            }
+            this.resolvePendingWriter(entry);
+            this.applyToStateMachine(entry);
         });
     };
+
+    private resolvePendingWriter(entry: Entry<LogValueType>) {
+        const serializedRequestId = serializeRequestId(entry.id);
+        const resolvePendingWriter =
+            this.pendingWritersForRequestId.get(serializedRequestId);
+        if (resolvePendingWriter != null) {
+            resolvePendingWriter();
+            this.pendingWritersForRequestId.delete(serializedRequestId);
+        }
+    }
+
+    private applyToStateMachine(entry: Entry<LogValueType>) {
+        const { id } = entry;
+        const { clientId, requestSerial } = id;
+
+        const highestProcessedSerialForClient =
+            this.serialProcessedPerClientId.get(clientId) ?? -1;
+        if (requestSerial <= highestProcessedSerialForClient) {
+            // Skip, this entry has already been applied to the state machine.
+            return;
+        }
+
+        this.serialProcessedPerClientId.set(clientId, requestSerial);
+        this.stateMachine.handleValue(entry.value);
+    }
 
     // Resolves
     // - with true when the entry has been committed and is safe to apply.
