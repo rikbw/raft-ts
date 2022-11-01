@@ -57,6 +57,16 @@ export function getInitialState<LogValueType>(
     };
 }
 
+type EntryWithoutTerm<LogValueType> =
+    | {
+          type: 'value';
+          id: RequestId;
+          value: LogValueType;
+      }
+    | {
+          type: 'noop';
+      };
+
 type MutableEvent<LogValueType> =
     | {
           type: 'electionTimeout';
@@ -71,9 +81,8 @@ type MutableEvent<LogValueType> =
           message: NodeMessage<LogValueType>;
       }
     | {
-          type: 'clientAppendToLog';
-          value: LogValueType;
-          requestId: RequestId;
+          type: 'appendToLog';
+          entry: EntryWithoutTerm<LogValueType>;
       };
 
 export type Event<LogValueType> = Readonly<MutableEvent<LogValueType>>;
@@ -112,6 +121,9 @@ type MutableEffect<LogValueType> =
           type: 'sendMessageToNode';
           message: NodeMessage<LogValueType>;
           node: number;
+      }
+    | {
+          type: 'appendNoopEntryToLog';
       };
 
 export type Effect<LogValueType> = Readonly<MutableEffect<LogValueType>>;
@@ -139,8 +151,8 @@ export function reduce<LogValueType>(
         case 'sendHeartbeatMessageTimeout':
             return reduceSendHeartbeatMessageTimeout(state, event.node);
 
-        case 'clientAppendToLog':
-            return reduceClientAppendToLog(state, event.value, event.requestId);
+        case 'appendToLog':
+            return reduceAppendToLog(state, event.entry);
 
         default:
             return unreachable(event);
@@ -721,13 +733,13 @@ function reduceReceivedRequestVoteResponse<LogValueType>({
                     commitIndex: state.commitIndex,
                 };
 
-                const effects = state.otherClusterNodes.map((node) =>
-                    sendAppendEntriesEffect({ node, state: newState }),
-                );
-
                 return {
                     newState,
-                    effects,
+                    effects: [
+                        {
+                            type: 'appendNoopEntryToLog',
+                        },
+                    ],
                 };
             }
 
@@ -852,10 +864,9 @@ function reduceReceivedRequestVote<LogValueType>({
     };
 }
 
-function reduceClientAppendToLog<LogValueType>(
+function reduceAppendToLog<LogValueType>(
     state: State<LogValueType>,
-    value: LogValueType,
-    id: RequestId,
+    entry: EntryWithoutTerm<LogValueType>,
 ): ReducerResult<LogValueType> {
     if (state.type !== 'leader') {
         throw new Error('can only append to log of leader node');
@@ -867,9 +878,8 @@ function reduceClientAppendToLog<LogValueType>(
         previousEntryIdentifier,
         entries: [
             {
+                ...entry,
                 term: state.currentTerm,
-                value,
-                id,
             },
         ],
     });

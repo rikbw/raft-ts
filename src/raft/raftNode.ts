@@ -43,15 +43,18 @@ export class RaftNode<LogValueType> {
         );
     }
 
-    public appendToLog(value: LogValueType, requestId: RequestId) {
+    public appendToLog(value: LogValueType, id: RequestId) {
         if (this.state.type !== 'leader') {
             return false;
         }
 
         this.dispatch({
-            type: 'clientAppendToLog',
-            value,
-            requestId,
+            type: 'appendToLog',
+            entry: {
+                type: 'value',
+                value,
+                id,
+            },
         });
         return true;
     }
@@ -137,9 +140,22 @@ export class RaftNode<LogValueType> {
                     this.resetElectionTimeout();
                     return;
 
+                case 'appendNoopEntryToLog':
+                    this.dispatch({
+                        type: 'appendToLog',
+                        entry: {
+                            type: 'noop',
+                        },
+                    });
+                    return;
+
                 default:
                     unreachable(effect);
             }
         });
+    }
+
+    public isLeaderAndCommittedAtLeastOneEntryThisTerm(): Promise<boolean> {
+        throw new Error('not implemented');
     }
 }

@@ -109,6 +109,11 @@ describe('RaftNode', () => {
         environment.nodes.forEach((node) => {
             expect(node.__stateForTests.log.getEntries()).toEqual([
                 {
+                    type: 'noop',
+                    term: 1,
+                },
+                {
+                    type: 'value',
                     term: 1,
                     value: 'x <- 1',
                     id: {
@@ -117,6 +122,7 @@ describe('RaftNode', () => {
                     },
                 },
                 {
+                    type: 'value',
                     term: 1,
                     value: 'y <- 2',
                     id: {
@@ -144,10 +150,10 @@ describe('RaftNode', () => {
             requestSerial: 11,
         });
 
-        // Node 0 and 1 have the log, node 2 has nothing.
-        expect(environment.nodes[0]!.__stateForTests.log.length).toEqual(2);
-        expect(environment.nodes[1]!.__stateForTests.log.length).toEqual(2);
-        expect(environment.nodes[2]!.__stateForTests.log.length).toEqual(0);
+        // Node 0 and 1 have the log (including a noop entry), node 2 has nothing.
+        expect(environment.nodes[0]!.__stateForTests.log.length).toEqual(3);
+        expect(environment.nodes[1]!.__stateForTests.log.length).toEqual(3);
+        expect(environment.nodes[2]!.__stateForTests.log.length).toEqual(1);
 
         environment.connect(2);
 
@@ -181,16 +187,31 @@ describe('RaftNode', () => {
             requestSerial: 2,
         });
 
-        environment.nodes.forEach((node, index) => {
-            expect(node.__stateForTests.commitIndex).toEqual(-1);
-            expect(environment.committedEntries[index] ?? []).toEqual([]);
-        });
+        // The noop entry is committed, but only on node 0. The rest of the nodes need a heartbeat to find out about that
+        expect(environment.nodes[0]!.__stateForTests.commitIndex).toEqual(0);
+        expect(environment.nodes[1]!.__stateForTests.commitIndex).toEqual(-1);
+        expect(environment.nodes[2]!.__stateForTests.commitIndex).toEqual(-1);
+
+        expect(environment.committedEntries[0] ?? []).toEqual([
+            {
+                type: 'noop',
+                term: 1,
+            },
+        ]);
+        expect(environment.committedEntries[1] ?? []).toEqual([]);
+        expect(environment.committedEntries[2] ?? []).toEqual([]);
 
         environment.connect(0);
         environment.nodes[0]!.sendHeartbeatTimeoutForNode(1);
 
         const entries = [
+            // Noop entry from when the leader got elected.
             {
+                term: 1,
+                type: 'noop',
+            },
+            {
+                type: 'value',
                 term: 1,
                 value: 'x <- 1',
                 id: {
@@ -199,6 +220,7 @@ describe('RaftNode', () => {
                 },
             },
             {
+                type: 'value',
                 term: 1,
                 value: 'y <- 2',
                 id: {
@@ -208,19 +230,26 @@ describe('RaftNode', () => {
             },
         ];
 
-        expect(environment.nodes[0]!.__stateForTests.commitIndex).toEqual(1);
+        expect(environment.nodes[0]!.__stateForTests.commitIndex).toEqual(2);
         expect(environment.committedEntries[0]).toEqual(entries);
-        expect(environment.nodes[1]!.__stateForTests.commitIndex).toEqual(-1);
-        expect(environment.committedEntries[1] ?? []).toEqual([]);
+        // Noop entry gets committed by previous heartbeat
+        expect(environment.nodes[1]!.__stateForTests.commitIndex).toEqual(0);
+        expect(environment.committedEntries[1] ?? []).toEqual([
+            {
+                type: 'noop',
+                term: 1,
+            },
+        ]);
+        // Node 2 hasn't received the heartbeat
         expect(environment.nodes[2]!.__stateForTests.commitIndex).toEqual(-1);
         expect(environment.committedEntries[2] ?? []).toEqual([]);
 
         // Second heartbeat to update the commitIndex
         environment.nodes[0]!.sendHeartbeatTimeoutForNode(1);
 
-        expect(environment.nodes[0]!.__stateForTests.commitIndex).toEqual(1);
+        expect(environment.nodes[0]!.__stateForTests.commitIndex).toEqual(2);
         expect(environment.committedEntries[0]).toEqual(entries);
-        expect(environment.nodes[1]!.__stateForTests.commitIndex).toEqual(1);
+        expect(environment.nodes[1]!.__stateForTests.commitIndex).toEqual(2);
         expect(environment.committedEntries[1]).toEqual(entries);
         expect(environment.nodes[2]!.__stateForTests.commitIndex).toEqual(-1);
         expect(environment.committedEntries[2] ?? []).toEqual([]);

@@ -5,7 +5,6 @@ import {
     FollowerState,
     CandidateState,
     LeaderState,
-    NodeMessage,
 } from './state';
 import { Entry, Log } from './log';
 
@@ -66,6 +65,7 @@ const createLogEntries = ({
         .map(
             (_, index): Entry<string> => ({
                 term,
+                type: 'value',
                 value: `x <- ${index}`,
                 id: {
                     clientId: 1,
@@ -947,7 +947,7 @@ describe('state', () => {
         });
 
         describe('when it receives request vote response', () => {
-            it('becomes leader when it receives a majority of the votes', () => {
+            it('becomes leader when it receives a majority of the votes and appends a noop entry', () => {
                 const state = candidateState({
                     currentTerm: 1,
                     otherClusterNodes: [1, 2],
@@ -975,26 +975,10 @@ describe('state', () => {
                     log: state.log,
                     commitIndex: state.commitIndex,
                 });
-                const message: NodeMessage<string> = {
-                    type: 'appendEntries',
-                    entries: [],
-                    term: 1,
-                    previousEntryIdentifier: {
-                        term: 0,
-                        index: 0,
-                    },
-                    leaderCommit: 0,
-                };
+                // This will trigger sending heartbeat messages
                 const effects: Array<Effect<string>> = [
                     {
-                        type: 'sendMessageToNode',
-                        node: 1,
-                        message,
-                    },
-                    {
-                        type: 'sendMessageToNode',
-                        node: 2,
-                        message,
+                        type: 'appendNoopEntryToLog',
                     },
                 ];
                 expect(reduce(event, state)).toEqual({
@@ -1177,6 +1161,7 @@ describe('state', () => {
                     currentTerm: 2,
                     log: new Log<string>([
                         {
+                            type: 'value',
                             value: 'x <- 1',
                             term: 1,
                             id: {
@@ -1185,6 +1170,7 @@ describe('state', () => {
                             },
                         },
                         {
+                            type: 'value',
                             value: 'y <- 2',
                             term: 2,
                             id: {
@@ -1230,6 +1216,7 @@ describe('state', () => {
                             },
                             entries: [
                                 {
+                                    type: 'value',
                                     value: 'y <- 2',
                                     term: 2,
                                     id: {
@@ -1692,11 +1679,14 @@ describe('state', () => {
                 commitIndex: 0,
             });
             const event: Event<string> = {
-                type: 'clientAppendToLog',
-                value: 'y <- 3',
-                requestId: {
-                    clientId: 12,
-                    requestSerial: 34,
+                type: 'appendToLog',
+                entry: {
+                    type: 'value',
+                    value: 'y <- 3',
+                    id: {
+                        clientId: 12,
+                        requestSerial: 34,
+                    },
                 },
             };
 
@@ -1706,6 +1696,7 @@ describe('state', () => {
                     ...initialEntries,
                     {
                         term: 2,
+                        type: 'value',
                         value: 'y <- 3',
                         id: {
                             clientId: 12,
@@ -1723,6 +1714,7 @@ describe('state', () => {
                         term: 2,
                         entries: [
                             {
+                                type: 'value',
                                 value: 'y <- 3',
                                 term: 2,
                                 id: {
@@ -1747,6 +1739,7 @@ describe('state', () => {
                         entries: [
                             ...initialEntries,
                             {
+                                type: 'value',
                                 value: 'y <- 3',
                                 term: 2,
                                 id: {

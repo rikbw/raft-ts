@@ -1,4 +1,4 @@
-import { Log } from './log';
+import { Entry, Log } from './log';
 
 const id = {
     clientId: 123,
@@ -11,6 +11,7 @@ describe('Log', () => {
             const log = new Log<string>([
                 {
                     term: 1,
+                    type: 'value',
                     value: 'x <- 1',
                     id,
                 },
@@ -24,6 +25,7 @@ describe('Log', () => {
                 entries: [
                     {
                         term: 2,
+                        type: 'value',
                         value: 'y <- 2',
                         id,
                     },
@@ -34,11 +36,13 @@ describe('Log', () => {
             expect(newLog.getEntries()).toEqual([
                 {
                     term: 1,
+                    type: 'value',
                     value: 'x <- 1',
                     id,
                 },
                 {
                     term: 2,
+                    type: 'value',
                     value: 'y <- 2',
                     id,
                 },
@@ -46,6 +50,7 @@ describe('Log', () => {
             expect(log.getEntries()).toEqual([
                 {
                     term: 1,
+                    type: 'value',
                     value: 'x <- 1',
                     id,
                 },
@@ -60,11 +65,13 @@ describe('Log', () => {
                 entries: [
                     {
                         term: 3,
+                        type: 'value',
                         value: 'x <- 8',
                         id,
                     },
                     {
                         term: 3,
+                        type: 'value',
                         value: 'y <- 12',
                         id,
                     },
@@ -75,11 +82,13 @@ describe('Log', () => {
             expect(newLog.getEntries()).toEqual([
                 {
                     term: 3,
+                    type: 'value',
                     value: 'x <- 8',
                     id,
                 },
                 {
                     term: 3,
+                    type: 'value',
                     value: 'y <- 12',
                     id,
                 },
@@ -87,9 +96,10 @@ describe('Log', () => {
         });
 
         it('is idempotent', () => {
-            const initialEntries = [
+            const initialEntries: Entry<string>[] = [
                 {
                     term: 1,
+                    type: 'value',
                     value: 'x <- 1',
                     id,
                 },
@@ -107,12 +117,14 @@ describe('Log', () => {
                             },
                             entries: [
                                 {
+                                    type: 'value',
                                     value: 'x <- 2',
                                     term: 1,
                                     id,
                                 },
                                 {
                                     term: 1,
+                                    type: 'value',
                                     value: 'y <- 3',
                                     id,
                                 },
@@ -134,12 +146,14 @@ describe('Log', () => {
             expect(newLog.getEntries()).toEqual([
                 ...initialEntries,
                 {
+                    type: 'value',
                     value: 'x <- 2',
                     term: 1,
                     id,
                 },
                 {
                     term: 1,
+                    type: 'value',
                     value: 'y <- 3',
                     id,
                 },
@@ -150,16 +164,19 @@ describe('Log', () => {
             const log = new Log<string>([
                 {
                     term: 1,
+                    type: 'value',
                     value: 'x <- 1',
                     id,
                 },
                 {
                     term: 1,
+                    type: 'value',
                     value: 'y <- 1',
                     id,
                 },
                 {
                     term: 1,
+                    type: 'value',
                     value: 'z <- 1',
                     id,
                 },
@@ -173,11 +190,13 @@ describe('Log', () => {
                 entries: [
                     {
                         term: 2,
+                        type: 'value',
                         value: 'a <- 2',
                         id,
                     },
                     {
                         term: 2,
+                        type: 'value',
                         value: 'b <- 3',
                         id,
                     },
@@ -188,16 +207,19 @@ describe('Log', () => {
             expect(newLog.getEntries()).toEqual([
                 {
                     term: 1,
+                    type: 'value',
                     value: 'x <- 1',
                     id,
                 },
                 {
                     term: 2,
+                    type: 'value',
                     value: 'a <- 2',
                     id,
                 },
                 {
                     term: 2,
+                    type: 'value',
                     value: 'b <- 3',
                     id,
                 },
@@ -205,9 +227,10 @@ describe('Log', () => {
         });
 
         it('overwrites the whole log if the previousEntryIdentifier is undefined and the term of the new logs is higher', () => {
-            const initialEntries = [
+            const initialEntries: Entry<string>[] = [
                 {
                     term: 3,
+                    type: 'value',
                     value: 'z <- 123',
                     id,
                 },
@@ -219,6 +242,7 @@ describe('Log', () => {
                 entries: [
                     {
                         term: 4,
+                        type: 'value',
                         value: 'x <- 1',
                         id,
                     },
@@ -229,6 +253,7 @@ describe('Log', () => {
             expect(newLog.getEntries()).toEqual([
                 {
                     term: 4,
+                    type: 'value',
                     value: 'x <- 1',
                     id,
                 },
@@ -236,9 +261,10 @@ describe('Log', () => {
         });
 
         it('rejects the entries if the term of the previous entry identifier is not correct', () => {
-            const initialEntries = [
+            const initialEntries: Entry<string>[] = [
                 {
                     term: 3,
+                    type: 'value',
                     value: 'z <- 123',
                     id,
                 },
@@ -253,6 +279,7 @@ describe('Log', () => {
                 entries: [
                     {
                         term: 4,
+                        type: 'value',
                         value: 'w <- 34',
                         id,
                     },
@@ -264,9 +291,10 @@ describe('Log', () => {
         });
 
         it('rejects the entries when the index of the previous identifier is not in the log', () => {
-            const initialEntries = [
+            const initialEntries: Entry<string>[] = [
                 {
                     term: 3,
+                    type: 'value',
                     value: 'z <- 123',
                     id,
                 },
@@ -281,6 +309,7 @@ describe('Log', () => {
                 entries: [
                     {
                         term: 4,
+                        type: 'value',
                         value: 'w <- 34',
                         id,
                     },
@@ -292,9 +321,10 @@ describe('Log', () => {
         });
 
         it('returns if the previous entry identifier is correct when entries is empty', () => {
-            const initialEntries = [
+            const initialEntries: Entry<string>[] = [
                 {
                     term: 3,
+                    type: 'value',
                     value: 'z <- 123',
                     id,
                 },
@@ -325,19 +355,22 @@ describe('Log', () => {
     });
 
     it('does not overwrite entries if they are already consistent (e.g. late delivery of a message)', () => {
-        const initialEntries = [
+        const initialEntries: Entry<string>[] = [
             {
                 term: 1,
+                type: 'value',
                 value: 'x <- 1',
                 id,
             },
             {
                 term: 1,
+                type: 'value',
                 value: 'y <- 1',
                 id,
             },
             {
                 term: 1,
+                type: 'value',
                 value: 'z <- 1',
                 id,
             },
@@ -351,6 +384,7 @@ describe('Log', () => {
             },
             entries: [
                 {
+                    type: 'value',
                     value: 'y <- 1',
                     term: 1,
                     id,
@@ -360,5 +394,23 @@ describe('Log', () => {
 
         expect(ok).toEqual(true);
         expect(newLog.getEntries()).toEqual(initialEntries);
+    });
+
+    it('appends noop entries', () => {
+        const log = new Log<string>([]);
+        const entries: Entry<string>[] = [
+            {
+                term: 0,
+                type: 'noop',
+            },
+        ];
+
+        const { ok, newLog } = log.appendEntries({
+            previousEntryIdentifier: undefined,
+            entries,
+        });
+
+        expect(ok).toEqual(true);
+        expect(newLog.getEntries()).toEqual(entries);
     });
 });

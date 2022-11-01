@@ -8,6 +8,8 @@ const id = {
     requestSerial: 2,
 };
 
+const logEntry = (value: string) => ({ type: 'value' as const, value, id });
+
 describe('commitIndex', () => {
     type TestCase = {
         followerMatchIndex: Record<number, number>;
@@ -23,13 +25,11 @@ describe('commitIndex', () => {
             logEntries: [
                 {
                     term: 1,
-                    value: 'x <- 2',
-                    id,
+                    ...logEntry('x <- 2'),
                 },
                 {
                     term: 2,
-                    value: 'x <- 2',
-                    id,
+                    ...logEntry('x <- 2'),
                 },
             ],
             currentCommitIndex: 0,
@@ -45,13 +45,11 @@ describe('commitIndex', () => {
             logEntries: [
                 {
                     term: 1,
-                    value: 'x <- 2',
-                    id,
+                    ...logEntry('x <- 2'),
                 },
                 {
                     term: 3,
-                    value: 'x <- 3',
-                    id,
+                    ...logEntry('x <- 3'),
                 },
             ],
             currentCommitIndex: 0,
@@ -78,18 +76,15 @@ describe('commitIndex', () => {
             logEntries: [
                 {
                     term: 1,
-                    value: 'x <- 2',
-                    id,
+                    ...logEntry('x <- 2'),
                 },
                 {
                     term: 2,
-                    value: 'x <- 3',
-                    id,
+                    ...logEntry('x <- 3'),
                 },
                 {
                     term: 3,
-                    value: 'x <- 4',
-                    id,
+                    ...logEntry('x <- 4'),
                 },
             ],
             currentCommitIndex: -1,
@@ -107,18 +102,15 @@ describe('commitIndex', () => {
             logEntries: [
                 {
                     term: 1,
-                    value: 'x <- 2',
-                    id,
+                    ...logEntry('x <- 2'),
                 },
                 {
                     term: 1,
-                    value: 'x <- 3',
-                    id,
+                    ...logEntry('x <- 3'),
                 },
                 {
                     term: 1,
-                    value: 'x <- 4',
-                    id,
+                    ...logEntry('x <- 4'),
                 },
             ],
             currentCommitIndex: -1,

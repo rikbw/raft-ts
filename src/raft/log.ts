@@ -11,9 +11,13 @@ export type RequestId = {
 };
 
 export type Entry<ValueType> = {
+    type: 'value',
     term: number;
     id: RequestId;
     value: ValueType;
+} | {
+    type: 'noop',
+    term: number
 };
 
 export class Log<ValueType> {
