@@ -3,6 +3,9 @@ import { OutgoingMessage, RaftNode } from './raftNode';
 import { createLogger } from 'bunyan';
 import { Entry } from './log';
 
+// Set to debug to get all logs
+const testLogLevel = 'fatal';
+
 class TestEnvironment {
     public readonly nodes: Array<RaftNode<string>>;
     public readonly committedEntries: Record<number, Array<Entry<string>>> = {};
@@ -11,7 +14,7 @@ class TestEnvironment {
 
     private readonly logger = createLogger({
         name: 'Test environment',
-        level: 'debug',
+        level: testLogLevel,
     });
 
     public constructor(nbNodes: number) {
@@ -22,7 +25,7 @@ class TestEnvironment {
         this.nodes = allNodes.map((index) => {
             const logger = createLogger({
                 name: `node ${index}`,
-                level: 'debug',
+                level: testLogLevel,
             });
             const otherNodes = allNodes.filter((id) => id != index);
             const noop = () => {

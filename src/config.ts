@@ -6,7 +6,7 @@ export type Logger = ReturnType<typeof createLogger>;
 
 type Configuration = {
     port: number;
-    otherPorts: number[];
+    otherPorts: ReadonlyArray<number>;
     logger: Logger;
 };
 
