@@ -44,6 +44,7 @@ const leaderState = ({
     followerInfo = {},
     otherClusterNodes = [],
     commitIndex = -1,
+    hasCommittedEntryThisTerm = false,
 }: Partial<LeaderState<string>> = {}): LeaderState<string> => ({
     type: 'leader',
     currentTerm,
@@ -51,6 +52,7 @@ const leaderState = ({
     followerInfo,
     otherClusterNodes,
     commitIndex,
+    hasCommittedEntryThisTerm,
 });
 
 const createLogEntries = ({
@@ -1468,7 +1470,7 @@ describe('state', () => {
                 });
             });
 
-            it('updates commitIndex if necessary', () => {
+            it('updates commitIndex if necessary and sets hasCommittedEntriesThisTerm', () => {
                 const state = leaderState({
                     currentTerm: 1,
                     log: createLog({ nbEntries: 2, term: 1 }),
@@ -1483,6 +1485,7 @@ describe('state', () => {
                             matchIndex: -1,
                         },
                     },
+                    hasCommittedEntryThisTerm: false,
                 });
                 const event: Event<string> = {
                     type: 'receivedMessageFromNode',
@@ -1506,6 +1509,7 @@ describe('state', () => {
                         },
                     },
                     commitIndex: 1,
+                    hasCommittedEntryThisTerm: true
                 });
                 expect(reduce(event, state)).toEqual({
                     newState,

@@ -21,6 +21,7 @@ type MutableState<LogValueType> =
           followerInfo: FollowerInfo;
           otherClusterNodes: ReadonlyArray<number>;
           commitIndex: number;
+          hasCommittedEntryThisTerm: boolean;
       }
     | {
           type: 'candidate';
@@ -664,6 +665,9 @@ function reduceReceivedAppendEntriesResponse<LogValueType>({
             const newState = {
                 ...updatedState,
                 commitIndex,
+                hasCommittedEntryThisTerm:
+                    updatedState.hasCommittedEntryThisTerm ||
+                    commitIndex > updatedState.commitIndex,
             };
 
             return {
@@ -731,6 +735,7 @@ function reduceReceivedRequestVoteResponse<LogValueType>({
                     currentTerm: state.currentTerm,
                     followerInfo,
                     commitIndex: state.commitIndex,
+                    hasCommittedEntryThisTerm: false,
                 };
 
                 return {
