@@ -20,10 +20,17 @@ export type OutgoingMessage<LogValueType> = NodeMessage<LogValueType> & {
     receiver: number;
 };
 
+const noop = () => {
+    // noop
+};
+
 // Wrapper on top of State & reducer, to give it an easier API to work with in the rest of the application.
 // This means it should remain pure (apart from logs).
 export class RaftNode<LogValueType> {
     private state: State<LogValueType>;
+
+    private resolveCommittedAtLeastOneEntry: (result: boolean) => void = noop;
+    private committedAtLeastOneEntry: Promise<boolean>;
 
     public constructor(
         private readonly sendMessage: (
@@ -41,11 +48,17 @@ export class RaftNode<LogValueType> {
             new Log<LogValueType>([]),
             otherClusterNodes,
         );
+        this.committedAtLeastOneEntry = new Promise((resolve) => {
+            this.resolveCommittedAtLeastOneEntry = resolve;
+        });
     }
 
-    public appendToLog(value: LogValueType, id: RequestId) {
+    public appendToLog(
+        value: LogValueType,
+        id: RequestId,
+    ): { isLeader: boolean } {
         if (this.state.type !== 'leader') {
-            return false;
+            return { isLeader: false };
         }
 
         this.dispatch({
@@ -56,7 +69,7 @@ export class RaftNode<LogValueType> {
                 id,
             },
         });
-        return true;
+        return { isLeader: true };
     }
 
     public leaderElectionTimeout() {
@@ -119,6 +132,22 @@ export class RaftNode<LogValueType> {
                 .slice(oldState.commitIndex + 1, newState.commitIndex + 1);
             this.onEntriesCommitted([...entries]);
         }
+
+        if (
+            oldState.type === 'leader' &&
+            newState.type === 'leader' &&
+            !oldState.hasCommittedEntryThisTerm &&
+            newState.hasCommittedEntryThisTerm
+        ) {
+            this.resolveCommittedAtLeastOneEntry(true);
+        }
+
+        if (oldState.type === 'leader' && newState.type !== 'leader') {
+            this.resolveCommittedAtLeastOneEntry(false);
+            this.committedAtLeastOneEntry = new Promise((resolve) => {
+                this.resolveCommittedAtLeastOneEntry = resolve;
+            });
+        }
     }
 
     private handleEffects(effects: Effect<LogValueType>[]) {
@@ -155,7 +184,11 @@ export class RaftNode<LogValueType> {
         });
     }
 
-    public isLeaderAndCommittedAtLeastOneEntryThisTerm(): Promise<boolean> {
-        throw new Error('not implemented');
+    public async isLeaderAndCommittedAtLeastOneEntryThisTerm(): Promise<boolean> {
+        if (this.state.type !== 'leader') {
+            return false;
+        }
+
+        return this.committedAtLeastOneEntry;
     }
 }

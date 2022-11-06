@@ -151,6 +151,7 @@ describe('commitIndex', () => {
                 type: 'leader',
                 // Not used
                 otherClusterNodes: [],
+                hasCommittedEntryThisTerm: false,
             };
 
             expect(commitIndexFromState(state)).toEqual(expectedCommitIndex);

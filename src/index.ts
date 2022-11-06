@@ -8,6 +8,7 @@ import * as io from 'io-ts';
 import { parseBodyMiddleware } from './middleware/parseBodyMiddleware';
 import { parseParamsMiddleware } from './middleware/parseParamsMiddleware';
 import { RequestId } from './raft/log';
+import { either } from 'fp-ts';
 
 // An example usage of the Raft library: state machine is a simple K/V store
 
@@ -51,37 +52,40 @@ const { port, otherPorts, logger } = getConfig();
 
 const raft = new Raft(port, otherPorts, keyValueStore, logger);
 
-const clientRequestSerialMap = new Map<number, number>();
-const clientRequestSerial = (clientId: number) => {
-    const serial = clientRequestSerialMap.get(clientId) ?? 0;
-    clientRequestSerialMap.set(clientId, serial + 1);
-    return serial;
-};
-
 const app = new Koa();
 
 app.use(koaBodyParser());
 
 const mainRouter = new Router();
 
-mainRouter.get('/get/:key', (context) => {
-    const { key } = context.params;
-    console.log('got get request', { key });
-    // TODO
-    //  - sync before read - paper section 8
-    //  - check that you are leader & redirect if not
-    context.body = keyValueStore.get(key as string);
-});
-
-const DeleteBody = io.type({
-    clientId: io.number,
-});
-type DeleteBody = io.TypeOf<typeof DeleteBody>;
-
 const KeyParams = io.type({
     key: io.string,
 });
 type KeyParams = io.TypeOf<typeof KeyParams>;
+
+mainRouter.get(
+    '/get/:key',
+    parseParamsMiddleware(KeyParams),
+    async (context) => {
+        const { key } = context.params;
+
+        logger.info('got get request', { key });
+
+        const { isLeader } = await raft.syncBeforeRead();
+
+        if (!isLeader) {
+            context.throw('This Raft node is not the leader', 400);
+        }
+
+        context.body = keyValueStore.get(key as string);
+    },
+);
+
+const DeleteBody = io.type({
+    clientId: io.number,
+    requestSerial: io.number,
+});
+type DeleteBody = io.TypeOf<typeof DeleteBody>;
 
 mainRouter.post(
     '/delete/:key',
@@ -89,11 +93,9 @@ mainRouter.post(
     parseParamsMiddleware(KeyParams),
     async (context) => {
         const { key } = context.params as KeyParams;
-        const { clientId } = context.request.body as DeleteBody;
+        const { clientId, requestSerial } = context.request.body as DeleteBody;
 
-        console.log('got delete request', { key, clientId });
-
-        const requestSerial = clientRequestSerial(clientId);
+        logger.info('got delete request', { key, clientId });
 
         const action: KeyValueStoreAction = {
             type: 'delete',
@@ -105,7 +107,25 @@ mainRouter.post(
             requestSerial,
         };
 
-        await raft.addToLog(action, id);
+        const result = await raft.addToLog(action, id);
+
+        if (either.isLeft(result)) {
+            switch (result.left) {
+                case 'notLeader':
+                    context.throw('This raft node is not the leader', 400);
+                    break;
+
+                case 'timedOut':
+                    context.throw(
+                        'Request timed out. Try again with the same request serial',
+                        503,
+                    );
+                    break;
+
+                default:
+                    unreachable(result.left);
+            }
+        }
 
         context.body = 'ok';
     },
@@ -114,6 +134,7 @@ mainRouter.post(
 const SetBody = io.type({
     clientId: io.number,
     value: io.string,
+    requestSerial: io.number,
 });
 type SetBody = io.TypeOf<typeof SetBody>;
 
@@ -123,11 +144,10 @@ mainRouter.post(
     parseBodyMiddleware(SetBody),
     async (context) => {
         const { key } = context.params as KeyParams;
-        const { value, clientId } = context.request.body as SetBody;
+        const { value, clientId, requestSerial } = context.request
+            .body as SetBody;
 
         logger.info('got set request', { key, value, clientId });
-
-        const requestSerial = clientRequestSerial(clientId);
 
         const action: KeyValueStoreAction = {
             type: 'set',
@@ -140,7 +160,25 @@ mainRouter.post(
             requestSerial,
         };
 
-        await raft.addToLog(action, id);
+        const result = await raft.addToLog(action, id);
+
+        if (either.isLeft(result)) {
+            switch (result.left) {
+                case 'notLeader':
+                    context.throw('This raft node is not the leader', 400);
+                    break;
+
+                case 'timedOut':
+                    context.throw(
+                        'Request timed out. Try again with the same request id',
+                        503,
+                    );
+                    break;
+
+                default:
+                    unreachable(result.left);
+            }
+        }
 
         context.body = 'ok';
     },
@@ -150,4 +188,4 @@ app.use(mainRouter.routes());
 
 app.listen(3000);
 
-console.log('listening on port 3000');
+logger.info('listening on port 3000');

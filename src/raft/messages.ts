@@ -8,20 +8,27 @@ const EntryIdentifier = io.union([
     }),
 ]);
 
+const Entry = io.union([
+    io.type({
+        type: io.literal('value'),
+        term: io.number,
+        value: io.any,
+        id: io.type({
+            requestSerial: io.number,
+            clientId: io.number,
+        }),
+    }),
+    io.type({
+        type: io.literal('noop'),
+        term: io.number,
+    }),
+]);
+
 const AppendEntries = io.type({
     type: io.literal('appendEntries'),
     previousEntryIdentifier: EntryIdentifier,
     term: io.number,
-    entries: io.array(
-        io.type({
-            term: io.number,
-            value: io.any,
-            id: io.type({
-                requestSerial: io.number,
-                clientId: io.number,
-            }),
-        }),
-    ),
+    entries: io.array(Entry),
     leaderCommit: io.number,
 });
 

@@ -30,11 +30,16 @@ export class Raft<LogValueType> {
     private readonly serialProcessedPerClientId: Map<number, number> =
         new Map();
 
+    private heartBeatsReceivedFromClientsForReadRequest: Set<{
+        heartBeatsFromNodes: Set<number>;
+        callbackWhenReceivedHeartBeatFromMajority: () => void;
+    }> = new Set();
+
     // For now, assuming we run on ports on the same machine.
     // That can easily be changed later to ip/port combinations.
     public constructor(
         private readonly nodePort: number,
-        otherNodePorts: ReadonlyArray<number>,
+        private readonly otherNodePorts: ReadonlyArray<number>,
         private readonly stateMachine: StateMachine<LogValueType>,
         private readonly logger: Logger,
         private readonly slowdownTimeBy: number = 1,
@@ -74,6 +79,10 @@ export class Raft<LogValueType> {
             sender,
             ...message,
         };
+
+        if (message.type === 'appendEntriesResponse') {
+            this.onReceiveHeartbeatFromNode(sender);
+        }
 
         this.raftNode.receiveMessage(incomingMessage);
     }
@@ -141,6 +150,10 @@ export class Raft<LogValueType> {
     };
 
     private resolvePendingWriter(entry: Entry<LogValueType>) {
+        if (entry.type === 'noop') {
+            return;
+        }
+
         const serializedRequestId = serializeRequestId(entry.id);
         const resolvePendingWriter =
             this.pendingWritersForRequestId.get(serializedRequestId);
@@ -151,6 +164,10 @@ export class Raft<LogValueType> {
     }
 
     private applyToStateMachine(entry: Entry<LogValueType>) {
+        if (entry.type === 'noop') {
+            return;
+        }
+
         const { id } = entry;
         const { clientId, requestSerial } = id;
 
@@ -168,11 +185,15 @@ export class Raft<LogValueType> {
     // Resolves
     // - with true when the entry has been committed and is safe to apply.
     // - with false when it timed out. The entry can be committed in the future.
-    public addToLog(
+    public async addToLog(
         value: LogValueType,
         requestId: RequestId,
-    ): Promise<boolean> {
-        this.raftNode.appendToLog(value, requestId);
+    ): Promise<either.Either<'notLeader' | 'timedOut', undefined>> {
+        const { isLeader } = this.raftNode.appendToLog(value, requestId);
+
+        if (!isLeader) {
+            return either.left('notLeader');
+        }
 
         const waitForLogToBeCommitted: Promise<boolean> = new Promise(
             (resolve) => {
@@ -189,12 +210,61 @@ export class Raft<LogValueType> {
             setTimeout(() => resolve(false), 10000),
         );
 
-        return Promise.race([waitForLogToBeCommitted, timeout]);
+        const ok = await Promise.race([waitForLogToBeCommitted, timeout]);
+
+        if (!ok) {
+            return either.left('timedOut');
+        }
+
+        return either.right(undefined);
     }
 
-    // This should be called before every read. It resolves when:
-    // 1.
-    public syncBeforeRead(): Promise<void> {
-        throw new Error('not implemented');
+    private onReceiveHeartbeatFromNode = (node: number) => {
+        const toDelete: Array<{
+            heartBeatsFromNodes: Set<number>;
+            callbackWhenReceivedHeartBeatFromMajority: () => void;
+        }> = [];
+
+        this.heartBeatsReceivedFromClientsForReadRequest.forEach((entry) => {
+            const {
+                callbackWhenReceivedHeartBeatFromMajority,
+                heartBeatsFromNodes,
+            } = entry;
+
+            heartBeatsFromNodes.add(node);
+
+            if (heartBeatsFromNodes.size >= this.otherNodePorts.length / 2) {
+                callbackWhenReceivedHeartBeatFromMajority();
+                toDelete.push(entry);
+            }
+        });
+
+        toDelete.forEach((entry) =>
+            this.heartBeatsReceivedFromClientsForReadRequest.delete(entry),
+        );
+    };
+
+    private waitUntilReceivedHeartBeatFromMajority(): Promise<void> {
+        return new Promise((resolve) => {
+            this.heartBeatsReceivedFromClientsForReadRequest.add({
+                heartBeatsFromNodes: new Set(),
+                callbackWhenReceivedHeartBeatFromMajority: resolve,
+            });
+        });
+    }
+
+    // This should be called before every read. It resolves to true when:
+    // 1. This Raft node is the leader.
+    // 2. It has committed at least one entry in this term.
+    // 3. It has exchanged heartbeats with a majority of the nodes in the cluster.
+    public async syncBeforeRead(): Promise<{ isLeader: boolean }> {
+        const isLeaderAndHasCommittedAtLeastOneEntryThisTerm =
+            await this.raftNode.isLeaderAndCommittedAtLeastOneEntryThisTerm();
+        if (!isLeaderAndHasCommittedAtLeastOneEntryThisTerm) {
+            return { isLeader: false };
+        }
+
+        await this.waitUntilReceivedHeartBeatFromMajority();
+        return { isLeader: true };
     }
 }
