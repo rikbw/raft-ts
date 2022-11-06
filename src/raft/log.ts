@@ -10,15 +10,17 @@ export type RequestId = {
     requestSerial: number;
 };
 
-export type Entry<ValueType> = {
-    type: 'value',
-    term: number;
-    id: RequestId;
-    value: ValueType;
-} | {
-    type: 'noop',
-    term: number
-};
+export type Entry<ValueType> =
+    | {
+          type: 'value';
+          term: number;
+          id: RequestId;
+          value: ValueType;
+      }
+    | {
+          type: 'noop';
+          term: number;
+      };
 
 export class Log<ValueType> {
     private readonly entries: ImmutableArray<Entry<ValueType>>;

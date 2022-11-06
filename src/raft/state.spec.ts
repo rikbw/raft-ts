@@ -1509,7 +1509,7 @@ describe('state', () => {
                         },
                     },
                     commitIndex: 1,
-                    hasCommittedEntryThisTerm: true
+                    hasCommittedEntryThisTerm: true,
                 });
                 expect(reduce(event, state)).toEqual({
                     newState,
