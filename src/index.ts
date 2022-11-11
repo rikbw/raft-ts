@@ -9,6 +9,7 @@ import { parseBodyMiddleware } from './middleware/parseBodyMiddleware';
 import { parseParamsMiddleware } from './middleware/parseParamsMiddleware';
 import { RequestId } from './raft/log';
 import { either } from 'fp-ts';
+import { DeleteBody, SetBody } from './apiFormat';
 
 // An example usage of the Raft library: state machine is a simple K/V store
 
@@ -50,7 +51,13 @@ const keyValueStore = new KeyValueStore();
 
 const { port, otherPorts, logger } = getConfig();
 
-const raft = new Raft(port, otherPorts, keyValueStore, logger);
+// ports are used for http services, listen on higher ports for raft messages between servers.
+const raftPort = port + otherPorts.length + 1;
+const otherRaftPorts = otherPorts.map(
+    (otherPort) => otherPort + otherPorts.length + 1,
+);
+
+const raft = new Raft(raftPort, otherRaftPorts, keyValueStore, logger);
 
 const app = new Koa();
 
@@ -74,18 +81,12 @@ mainRouter.get(
         const { isLeader } = await raft.syncBeforeRead();
 
         if (!isLeader) {
-            context.throw('This Raft node is not the leader', 400);
+            context.throw(400, 'This Raft node is not the leader');
         }
 
         context.body = keyValueStore.get(key as string);
     },
 );
-
-const DeleteBody = io.type({
-    clientId: io.number,
-    requestSerial: io.number,
-});
-type DeleteBody = io.TypeOf<typeof DeleteBody>;
 
 mainRouter.post(
     '/delete/:key',
@@ -112,13 +113,13 @@ mainRouter.post(
         if (either.isLeft(result)) {
             switch (result.left) {
                 case 'notLeader':
-                    context.throw('This raft node is not the leader', 400);
+                    context.throw(400, 'This raft node is not the leader');
                     break;
 
                 case 'timedOut':
                     context.throw(
-                        'Request timed out. Try again with the same request serial',
                         503,
+                        'Request timed out. Try again with the same request serial',
                     );
                     break;
 
@@ -131,13 +132,6 @@ mainRouter.post(
     },
 );
 
-const SetBody = io.type({
-    clientId: io.number,
-    value: io.string,
-    requestSerial: io.number,
-});
-type SetBody = io.TypeOf<typeof SetBody>;
-
 mainRouter.post(
     '/set/:key',
     parseParamsMiddleware(KeyParams),
@@ -147,7 +141,7 @@ mainRouter.post(
         const { value, clientId, requestSerial } = context.request
             .body as SetBody;
 
-        logger.info('got set request', { key, value, clientId });
+        logger.info('got set request', { key, value, clientId, requestSerial });
 
         const action: KeyValueStoreAction = {
             type: 'set',
@@ -165,13 +159,13 @@ mainRouter.post(
         if (either.isLeft(result)) {
             switch (result.left) {
                 case 'notLeader':
-                    context.throw('This raft node is not the leader', 400);
+                    context.throw(400, 'This raft node is not the leader');
                     break;
 
                 case 'timedOut':
                     context.throw(
-                        'Request timed out. Try again with the same request id',
                         503,
+                        'Request timed out. Try again with the same request id',
                     );
                     break;
 
@@ -186,6 +180,6 @@ mainRouter.post(
 
 app.use(mainRouter.routes());
 
-app.listen(3000);
+app.listen(port);
 
-logger.info('listening on port 3000');
+logger.info(`listening on port ${port}`);

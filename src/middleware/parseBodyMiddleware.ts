@@ -3,13 +3,21 @@ import { Middleware } from 'koa';
 import { either } from 'fp-ts';
 
 export const parseBodyMiddleware =
-    (body: io.Any): Middleware =>
+    (bodyCodec: io.Any): Middleware =>
     (context, next) => {
-        const result = body.decode(context.request.body);
-        if (either.isLeft(result)) {
-            context.throw(400, 'Invalid request body');
+        try {
+            const body = JSON.parse(context.request.body);
+            const result = bodyCodec.decode(body);
+            if (either.isLeft(result)) {
+                context.throw(400, 'Invalid request body');
+                return;
+            }
+
+            context.request.body = body;
+
+            return next();
+        } catch {
+            context.throw(400, 'Request body is not valid JSON');
             return;
         }
-
-        return next();
     };
