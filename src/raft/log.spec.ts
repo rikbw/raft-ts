@@ -413,4 +413,31 @@ describe('Log', () => {
         expect(ok).toEqual(true);
         expect(newLog.getEntries()).toEqual(entries);
     });
+
+    it('does not mutate the old log', () => {
+        const log = new Log<string>([]);
+        const entries: Entry<string>[] = [
+            {
+                term: 0,
+                type: 'noop',
+            },
+            {
+                term: 0,
+                type: 'value',
+                value: 'x <- 2',
+                id: {
+                    requestSerial: 0,
+                    clientId: 2,
+                },
+            },
+        ];
+
+        const { ok } = log.appendEntries({
+            previousEntryIdentifier: undefined,
+            entries,
+        });
+
+        expect(ok).toEqual(true);
+        expect(log.getEntries()).toEqual([]);
+    });
 });

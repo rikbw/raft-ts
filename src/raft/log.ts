@@ -73,7 +73,7 @@ export class Log<ValueType> {
         );
     }
 
-    // The called of this method should check that the term of the appendEntries request is higher or equal than the
+    // The caller of this method should check that the term of the appendEntries request is higher or equal than the
     // expected term.
     public appendEntries({
         previousEntryIdentifier,
