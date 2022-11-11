@@ -13,8 +13,6 @@ export type StateMachine<LogValueType> = {
     handleValue(value: LogValueType): void;
 };
 
-// TODO make timeouts ranges
-
 // Class instance will maintain internal state, and respond to things from the world.
 // It will manage timers & fire these.
 // It will communicate with other raft nodes.
@@ -130,7 +128,9 @@ export class Raft<LogValueType> {
         clearTimeout(this.electionTimeout);
         this.electionTimeout = setTimeout(
             () => this.raftNode.leaderElectionTimeout(),
-            this.leaderElectionTimeoutMs * this.slowdownTimeBy,
+            this.leaderElectionTimeoutMs *
+                (Math.random() + 1) *
+                this.slowdownTimeBy,
         );
     };
 
