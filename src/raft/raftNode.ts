@@ -9,6 +9,8 @@ import {
 import { Entry, Log, RequestId } from './log';
 import { unreachable } from '../util/unreachable';
 import { createLogger } from 'bunyan';
+import { readEntries, writeEntries } from './persistence';
+import Immutable from 'seamless-immutable';
 
 type Logger = ReturnType<typeof createLogger>;
 
@@ -40,12 +42,13 @@ export class RaftNode<LogValueType> {
         private readonly onEntriesCommitted: (
             entries: Array<Entry<LogValueType>>,
         ) => void,
+        private readonly persistenceFilePath: string,
         private readonly logger: Logger,
         otherClusterNodes: ReadonlyArray<number>,
     ) {
+        const initialEntries = readEntries<LogValueType>(persistenceFilePath);
         this.state = getInitialState(
-            // TODO this should read the log from disk. Should probably be passed down by the caller of this constructor.
-            new Log<LogValueType>([]),
+            new Log<LogValueType>(initialEntries),
             otherClusterNodes,
         );
         this.committedAtLeastOneEntry = new Promise((resolve) => {
@@ -178,6 +181,10 @@ export class RaftNode<LogValueType> {
                     });
                     return;
 
+                case 'persistLog':
+                    this.persistLog(this.state.log);
+                    return;
+
                 default:
                     unreachable(effect);
             }
@@ -190,5 +197,12 @@ export class RaftNode<LogValueType> {
         }
 
         return this.committedAtLeastOneEntry;
+    }
+
+    private persistLog(log: Log<LogValueType>) {
+        writeEntries(
+            this.persistenceFilePath,
+            Immutable.asMutable(log.getEntries()),
+        );
     }
 }

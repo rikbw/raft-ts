@@ -210,6 +210,9 @@ describe('state', () => {
                 });
                 const effects: Array<Effect<string>> = [
                     {
+                        type: 'persistLog',
+                    },
+                    {
                         type: 'sendMessageToNode',
                         node,
                         message: {
@@ -349,6 +352,9 @@ describe('state', () => {
                 });
                 const effects: Array<Effect<string>> = [
                     {
+                        type: 'persistLog',
+                    },
+                    {
                         type: 'sendMessageToNode',
                         node: 0,
                         message: {
@@ -393,6 +399,9 @@ describe('state', () => {
                 });
                 const effects: Array<Effect<string>> = [
                     {
+                        type: 'persistLog',
+                    },
+                    {
                         type: 'sendMessageToNode',
                         node: 0,
                         message: {
@@ -436,6 +445,9 @@ describe('state', () => {
                     log: new Log(entries),
                 });
                 const effects: Array<Effect<string>> = [
+                    {
+                        type: 'persistLog',
+                    },
                     {
                         type: 'sendMessageToNode',
                         node: 0,
@@ -866,6 +878,9 @@ describe('state', () => {
                 log: new Log(entries),
             });
             const effects: Array<Effect<string>> = [
+                {
+                    type: 'persistLog',
+                },
                 {
                     type: 'sendMessageToNode',
                     node: 2,
@@ -1694,39 +1709,30 @@ describe('state', () => {
                 },
             };
 
+            const entry: Entry<string> = {
+                term: 2,
+                type: 'value',
+                value: 'y <- 3',
+                id: {
+                    clientId: 12,
+                    requestSerial: 34,
+                },
+            };
             const newState = leaderState({
                 ...state,
-                log: new Log([
-                    ...initialEntries,
-                    {
-                        term: 2,
-                        type: 'value',
-                        value: 'y <- 3',
-                        id: {
-                            clientId: 12,
-                            requestSerial: 34,
-                        },
-                    },
-                ]),
+                log: new Log([...initialEntries, entry]),
             });
             const effects: Array<Effect<string>> = [
+                {
+                    type: 'persistLog',
+                },
                 {
                     type: 'sendMessageToNode',
                     node: 0,
                     message: {
                         type: 'appendEntries',
                         term: 2,
-                        entries: [
-                            {
-                                type: 'value',
-                                value: 'y <- 3',
-                                term: 2,
-                                id: {
-                                    clientId: 12,
-                                    requestSerial: 34,
-                                },
-                            },
-                        ],
+                        entries: [entry],
                         previousEntryIdentifier: {
                             term: 1,
                             index: 0,
@@ -1740,18 +1746,7 @@ describe('state', () => {
                     message: {
                         type: 'appendEntries',
                         term: 2,
-                        entries: [
-                            ...initialEntries,
-                            {
-                                type: 'value',
-                                value: 'y <- 3',
-                                term: 2,
-                                id: {
-                                    clientId: 12,
-                                    requestSerial: 34,
-                                },
-                            },
-                        ],
+                        entries: [...initialEntries, entry],
                         previousEntryIdentifier: undefined,
                         leaderCommit: 0,
                     },

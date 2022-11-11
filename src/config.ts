@@ -2,6 +2,8 @@ import * as io from 'io-ts';
 import { createLogger } from 'bunyan';
 import { either } from 'fp-ts';
 import { IntFromString } from 'io-ts-types';
+import * as os from 'os';
+import * as path from 'path';
 
 export type Logger = ReturnType<typeof createLogger>;
 
@@ -9,6 +11,7 @@ type Configuration = {
     port: number;
     otherPorts: ReadonlyArray<number>;
     logger: Logger;
+    persistenceFilePath: string;
 };
 
 let config: Configuration | undefined = undefined;
@@ -46,6 +49,10 @@ function setupConfig(): Configuration {
         );
     }
 
+    const persistenceFilePath =
+        process.env['PERSISTENCE_FILE_PATH'] ??
+        path.join(os.tmpdir(), 'raft', `${port.right}`);
+
     const logger = createLogger({
         name: 'Raft node',
         level: logLevel.right ?? 'info',
@@ -55,5 +62,6 @@ function setupConfig(): Configuration {
         port: port.right,
         otherPorts: otherPorts.right,
         logger,
+        persistenceFilePath,
     };
 }

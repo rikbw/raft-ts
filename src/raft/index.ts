@@ -40,6 +40,7 @@ export class Raft<LogValueType> {
         private readonly otherNodePorts: ReadonlyArray<number>,
         private readonly stateMachine: StateMachine<LogValueType>,
         private readonly logger: Logger,
+        persistenceFilePath: string,
         private readonly slowdownTimeBy: number = 1,
         private readonly leaderElectionTimeoutMs: number = 3000,
         private readonly heartbeatTimeoutMs: number = 500,
@@ -48,6 +49,7 @@ export class Raft<LogValueType> {
             this.sendMessageToNode,
             this.resetElectionTimeout,
             this.onEntriesCommitted,
+            persistenceFilePath,
             logger,
             otherNodePorts,
         );

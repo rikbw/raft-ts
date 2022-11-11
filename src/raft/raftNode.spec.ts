@@ -2,6 +2,9 @@
 import { OutgoingMessage, RaftNode } from './raftNode';
 import { createLogger } from 'bunyan';
 import { Entry } from './log';
+import * as path from 'path';
+import * as os from 'os';
+import * as fs from 'fs/promises';
 
 // Set to debug to get all logs
 const testLogLevel = 'fatal';
@@ -17,7 +20,7 @@ class TestEnvironment {
         level: testLogLevel,
     });
 
-    public constructor(nbNodes: number) {
+    public constructor(nbNodes: number, persistenceFolder: string) {
         const allNodes = Array(nbNodes)
             .fill(null)
             .map((_, index) => index);
@@ -38,10 +41,15 @@ class TestEnvironment {
 
                 this.committedEntries[index]!.push(...entries);
             };
+            const persistenceFilePath = path.join(
+                persistenceFolder,
+                `${index}`,
+            );
             return new RaftNode<string>(
                 (message) => this.sendMessage({ message, sender: index }),
                 noop,
                 onEntriesCommitted,
+                persistenceFilePath,
                 logger,
                 otherNodes,
             );
@@ -90,8 +98,18 @@ class TestEnvironment {
 }
 
 describe('RaftNode', () => {
+    const persistenceFolder = path.join(os.tmpdir(), 'persistence');
+
+    beforeEach(async () => {
+        await fs.mkdir(persistenceFolder);
+    });
+
+    afterEach(async () => {
+        await fs.rm(persistenceFolder, { recursive: true, force: true });
+    });
+
     it('syncs the log with follower nodes', () => {
-        const environment = new TestEnvironment(3);
+        const environment = new TestEnvironment(3, persistenceFolder);
 
         environment.nodes[0]!.leaderElectionTimeout();
 
@@ -135,7 +153,7 @@ describe('RaftNode', () => {
     });
 
     it('does not elect nodes that do not have a complete log (5.4.1 in paper)', () => {
-        const environment = new TestEnvironment(3);
+        const environment = new TestEnvironment(3, persistenceFolder);
 
         environment.nodes[0]!.leaderElectionTimeout();
 
@@ -171,7 +189,7 @@ describe('RaftNode', () => {
     });
 
     it('sets commitIndex when replicating logs to a majority', () => {
-        const environment = new TestEnvironment(3);
+        const environment = new TestEnvironment(3, persistenceFolder);
 
         // Make node 0 leader
         environment.nodes[0]!.leaderElectionTimeout();

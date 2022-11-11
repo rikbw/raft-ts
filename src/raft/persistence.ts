@@ -6,7 +6,7 @@ import * as fs from 'fs';
 
 export function writeEntries<LogValueType>(
     filePath: string,
-    entries: Entry<LogValueType>[],
+    entries: ReadonlyArray<Entry<LogValueType>>,
 ) {
     const fileContentsString = JSON.stringify(entries);
     const fileContents = Buffer.from(fileContentsString, 'utf-8');
@@ -16,7 +16,15 @@ export function writeEntries<LogValueType>(
 export function readEntries<LogValueType>(
     filePath: string,
 ): Entry<LogValueType>[] {
-    const fileContents = fs.readFileSync(filePath);
-    const fileContentsString = fileContents.toString('utf-8');
-    return JSON.parse(fileContentsString);
+    try {
+        const fileContents = fs.readFileSync(filePath);
+        const fileContentsString = fileContents.toString('utf-8');
+        return JSON.parse(fileContentsString);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } catch (error: any) {
+        if (error.code === 'ENOENT') {
+            return [];
+        }
+        throw error;
+    }
 }

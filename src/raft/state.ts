@@ -125,6 +125,9 @@ type MutableEffect<LogValueType> =
       }
     | {
           type: 'appendNoopEntryToLog';
+      }
+    | {
+          type: 'persistLog';
       };
 
 export type Effect<LogValueType> = Readonly<MutableEffect<LogValueType>>;
@@ -368,6 +371,13 @@ function reduceReceivedAppendEntries<LogValueType>({
             return {
                 newState,
                 effects: [
+                    ...(entries.length > 0
+                        ? [
+                              {
+                                  type: 'persistLog' as const,
+                              },
+                          ]
+                        : []),
                     {
                         type: 'sendMessageToNode',
                         message: {
@@ -418,6 +428,9 @@ function reduceReceivedAppendEntries<LogValueType>({
                 return {
                     newState,
                     effects: [
+                        ...(ok && entries.length > 0
+                            ? [{ type: 'persistLog' as const }]
+                            : []),
                         {
                             type: 'sendMessageToNode',
                             node,
@@ -879,14 +892,14 @@ function reduceAppendToLog<LogValueType>(
 
     const previousEntryIdentifier = lastEntryIdentifierFromState(state);
 
+    const entryWithTerm = {
+        ...entry,
+        term: state.currentTerm,
+    };
+
     const { ok, newLog } = state.log.appendEntries({
         previousEntryIdentifier,
-        entries: [
-            {
-                ...entry,
-                term: state.currentTerm,
-            },
-        ],
+        entries: [entryWithTerm],
     });
 
     if (!ok) {
@@ -898,14 +911,19 @@ function reduceAppendToLog<LogValueType>(
         log: newLog,
     };
 
-    const effects = newState.otherClusterNodes.map(
+    const sendAppendEntriesEffects = newState.otherClusterNodes.map(
         (node): Effect<LogValueType> =>
             sendAppendEntriesEffect({ state: newState, node }),
     );
 
     return {
         newState,
-        effects,
+        effects: [
+            {
+                type: 'persistLog',
+            },
+            ...sendAppendEntriesEffects,
+        ],
     };
 }
 

@@ -49,7 +49,7 @@ class KeyValueStore implements StateMachine<KeyValueStoreAction> {
 
 const keyValueStore = new KeyValueStore();
 
-const { port, otherPorts, logger } = getConfig();
+const { port, otherPorts, logger, persistenceFilePath } = getConfig();
 
 // ports are used for http services, listen on higher ports for raft messages between servers.
 const raftPort = port + otherPorts.length + 1;
@@ -57,7 +57,13 @@ const otherRaftPorts = otherPorts.map(
     (otherPort) => otherPort + otherPorts.length + 1,
 );
 
-const raft = new Raft(raftPort, otherRaftPorts, keyValueStore, logger);
+const raft = new Raft(
+    raftPort,
+    otherRaftPorts,
+    keyValueStore,
+    logger,
+    persistenceFilePath,
+);
 
 const app = new Koa();
 
