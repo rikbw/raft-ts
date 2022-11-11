@@ -47,13 +47,15 @@ export type CandidateState<LogValueType> = State<LogValueType> & {
 export function getInitialState<LogValueType>(
     log: Log<LogValueType>,
     otherClusterNodes: ReadonlyArray<number>,
+    currentTerm: number,
+    votedFor: number | undefined,
 ): State<LogValueType> {
     return {
         type: 'follower',
-        currentTerm: 0,
+        currentTerm,
         log,
         otherClusterNodes,
-        votedFor: undefined,
+        votedFor,
         commitIndex: -1,
     };
 }

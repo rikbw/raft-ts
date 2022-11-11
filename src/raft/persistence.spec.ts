@@ -2,9 +2,13 @@ import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
 import { Entry } from './log';
-import { readEntries, writeEntries } from './persistence';
+import {
+    PersistenceFile,
+    readPersistenceFile,
+    writePersistenceFile,
+} from './persistence';
 
-describe('PersistedLog', () => {
+describe('persistence', () => {
     let tmpDir = '';
     let filePath = '';
 
@@ -29,9 +33,14 @@ describe('PersistedLog', () => {
                 },
             },
         ];
+        const file: PersistenceFile<string> = {
+            votedFor: 2,
+            currentTerm: 23,
+            entries,
+        };
 
-        writeEntries(filePath, entries);
+        writePersistenceFile(filePath, file);
 
-        expect(readEntries(filePath)).toEqual(entries);
+        expect(readPersistenceFile(filePath)).toEqual(file);
     });
 });

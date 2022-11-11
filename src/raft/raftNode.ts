@@ -9,7 +9,7 @@ import {
 import { Entry, Log, RequestId } from './log';
 import { unreachable } from '../util/unreachable';
 import { createLogger } from 'bunyan';
-import { readEntries, writeEntries } from './persistence';
+import { readPersistenceFile, writePersistenceFile } from './persistence';
 import Immutable from 'seamless-immutable';
 
 type Logger = ReturnType<typeof createLogger>;
@@ -46,10 +46,13 @@ export class RaftNode<LogValueType> {
         private readonly logger: Logger,
         otherClusterNodes: ReadonlyArray<number>,
     ) {
-        const initialEntries = readEntries<LogValueType>(persistenceFilePath);
+        const { entries, votedFor, currentTerm } =
+            readPersistenceFile<LogValueType>(persistenceFilePath);
         this.state = getInitialState(
-            new Log<LogValueType>(initialEntries),
+            new Log<LogValueType>(entries),
             otherClusterNodes,
+            currentTerm,
+            votedFor,
         );
         this.committedAtLeastOneEntry = new Promise((resolve) => {
             this.resolveCommittedAtLeastOneEntry = resolve;
@@ -182,7 +185,7 @@ export class RaftNode<LogValueType> {
                     return;
 
                 case 'persistLog':
-                    this.persistLog(this.state.log);
+                    this.persist();
                     return;
 
                 default:
@@ -199,10 +202,18 @@ export class RaftNode<LogValueType> {
         return this.committedAtLeastOneEntry;
     }
 
-    private persistLog(log: Log<LogValueType>) {
-        writeEntries(
-            this.persistenceFilePath,
-            Immutable.asMutable(log.getEntries()),
-        );
+    private persist() {
+        const log = this.state.log;
+        const entries = Immutable.asMutable(log.getEntries());
+        const votedFor =
+            this.state.type === 'follower' ? this.state.votedFor : undefined;
+        const currentTerm = this.state.currentTerm;
+
+        const file = {
+            entries,
+            votedFor,
+            currentTerm,
+        };
+        writePersistenceFile(this.persistenceFilePath, file);
     }
 }
