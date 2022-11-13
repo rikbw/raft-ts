@@ -8,6 +8,8 @@ It's an implementation of the [Raft consensus algorithm](https://raft.github.io/
 Right now it likely contains some bugs and will not be performant.
 Verifying that the program works correctly will require extra work.
 
+This implementation does not support configuration changes.
+
 The library only supports running Raft nodes on a single machine.
 To support multiple machines, the `Raft` class should take urls and not ports as inputs.
 
